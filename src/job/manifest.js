@@ -68,6 +68,7 @@ export const MANIFEST = {
         ov: {
           images: {
             r0: { src: "/assets/demo/pre-ov.png", aspect: "600 / 400" },
+            r1: { src: "/assets/demo/post-ov.png", aspect: "620 / 410" },
             r2: { src: "/assets/demo/post-ov.png", aspect: "620 / 410" },
           },
           vent: { src: "/assets/demo/vents-ov.png", aspect: "800 / 500", count: 4 },

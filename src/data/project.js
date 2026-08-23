@@ -90,3 +90,29 @@ export const CAMPUS = {
 };
 
 export const findBuilding = (id) => BUILDINGS.find((b) => b.id === id) || null;
+
+/** One unit's needs-to-dry series across rounds, for the drying trend. */
+export function unitSeries(unitId) {
+  const u = MANIFEST.units.find((x) => x.id === unitId);
+  if (!u) return [];
+  return SCANS.map((round, index) => ({ round, index, sf: u.needsToDry?.[round.id] }))
+    .filter((p) => p.sf !== undefined && p.sf !== null);
+}
+
+/**
+ * The whole property's series — only rounds every unit was measured in, so a
+ * partially-scanned round never masquerades as a site-wide improvement.
+ */
+export function campusSeries() {
+  return SCANS.map((round, index) => {
+    const values = MANIFEST.units.map((u) => u.needsToDry?.[round.id]);
+    if (values.some((v) => v === undefined || v === null)) return null;
+    return { round, index, sf: values.reduce((a, v) => a + v, 0) };
+  }).filter(Boolean);
+}
+
+/** A section's image for one specific round, for the round-picker comparison. */
+export function sectionImage(unitId, sectionKey, roundId) {
+  const img = MANIFEST.units.find((x) => x.id === unitId)?.sections?.[sectionKey]?.images?.[roundId];
+  return img ? { src: img.src, aspect: img.aspect } : null;
+}

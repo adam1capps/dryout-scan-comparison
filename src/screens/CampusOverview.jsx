@@ -9,7 +9,9 @@ import {
   SCANS,
   TERMS,
   VENT_STATUS_SUMMARY,
+  campusSeries,
   findBuilding,
+  unitSeries,
 } from "../data/project.js";
 import VentRecap from "../components/VentRecap.jsx";
 import QuoteIt from "../components/QuoteIt.jsx";
@@ -67,6 +69,8 @@ export default function CampusOverview({ store, canEdit, onOpenBuilding }) {
 
   const campus = campusScope(store.proposals);
   const campusTone = dryingTone(campus.pre, campus.postInScope);
+  // A trend needs at least two rounds; single-round jobs skip the column.
+  const showTrend = SCANS.length > 1;
 
   const ventTotal = VENT_STATUS_SUMMARY.reduce((a, s) => a + s.count, 0);
   const ventStatusLine =
@@ -247,7 +251,7 @@ export default function CampusOverview({ store, canEdit, onOpenBuilding }) {
             width: "100%",
             borderCollapse: "collapse",
             fontSize: 14,
-            minWidth: 680,
+            minWidth: 740,
           }}
         >
           <thead>
@@ -275,6 +279,7 @@ export default function CampusOverview({ store, canEdit, onOpenBuilding }) {
                   {mark(col.key)}
                 </th>
               ))}
+              {showTrend && <th style={{ ...th, textAlign: "right" }}>Trend</th>}
               <th style={{ background: C.navy, borderRadius: "0 8px 0 0" }} />
             </tr>
           </thead>
@@ -314,6 +319,11 @@ export default function CampusOverview({ store, canEdit, onOpenBuilding }) {
                   <Td align="right" label="Additional Scope Found">
                     {sc.outOfScope > 0 ? <AdditionalScope sf={sc.outOfScope} /> : "—"}
                   </Td>
+                  {showTrend && (
+                    <Td align="right" label="Drying trend">
+                      <Sparkline series={unitSeries(b.id)} tone={tone} />
+                    </Td>
+                  )}
                   <Td className="cell-chevron" style={{ color: C.chrome, fontSize: 16 }}>
                     &#9656;
                   </Td>
@@ -341,6 +351,11 @@ export default function CampusOverview({ store, canEdit, onOpenBuilding }) {
                   "—"
                 )}
               </TotalTd>
+              {showTrend && (
+                <TotalTd align="right" label="Drying trend">
+                  <Sparkline series={campusSeries()} tone={campusTone} />
+                </TotalTd>
+              )}
               <td className="cell-chevron" style={{ borderTop: `2px solid ${C.navy}` }} />
             </tr>
           </tbody>
@@ -579,6 +594,52 @@ export default function CampusOverview({ store, canEdit, onOpenBuilding }) {
       {FEATURES.quoteIt && <QuoteIt additionalSf={campus.outOfScope} />}
 
     </div>
+  );
+}
+
+/**
+ * The round-by-round needs-to-dry line for one unit — the drying story at a
+ * glance. The faint bottom rule is 0 SF, the goal; the endpoint dot wears the
+ * unit's drying tone. Exact figures ride the native tooltip, so the cell stays
+ * quiet. All rows share one x-domain (every round) so shapes are comparable.
+ */
+function Sparkline({ series, tone }) {
+  if (series.length < 2) return "—";
+  const W = 92;
+  const H = 30;
+  const PX = 5;
+  const PY = 6;
+  const n = SCANS.length;
+  const max = Math.max(...series.map((p) => p.sf), 1);
+  const x = (i) => (n === 1 ? W / 2 : PX + (i * (W - 2 * PX)) / (n - 1));
+  const y = (sf) => H - PY - (sf / max) * (H - 2 * PY);
+  const pts = series.map((p) => `${x(p.index).toFixed(1)},${y(p.sf).toFixed(1)}`).join(" ");
+  const last = series[series.length - 1];
+  const words = series
+    .map((p) => `${p.round.label}: ${p.sf.toLocaleString("en-US")} SF`)
+    .join(" · ");
+  return (
+    <svg
+      width={W}
+      height={H}
+      viewBox={`0 0 ${W} ${H}`}
+      role="img"
+      aria-label={`Needs to dry by round — ${words}`}
+      style={{ display: "inline-block", verticalAlign: "middle" }}
+    >
+      <title>{words}</title>
+      <line x1={PX} y1={H - PY} x2={W - PX} y2={H - PY} stroke={C.border} strokeWidth="1" />
+      <polyline
+        points={pts}
+        fill="none"
+        stroke={C.navy}
+        strokeOpacity="0.55"
+        strokeWidth="2"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+      <circle cx={x(last.index)} cy={y(last.sf)} r="4" fill={tone.ink} stroke="#fff" strokeWidth="2" />
+    </svg>
   );
 }
 

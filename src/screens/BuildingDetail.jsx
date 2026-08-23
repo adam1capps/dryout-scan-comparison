@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { BASELINE, CURRENT, PROJECT, TERMS } from "../data/project.js";
+import { BASELINE, CURRENT, PROJECT, SCANS, TERMS, sectionImage } from "../data/project.js";
 import { C, card, dryingTone, fmtDate, fmtSF, pill, sectionHeading } from "../theme.js";
 import ScanFrame, { PlacementLayer, markerStyle } from "../components/ScanFrame.jsx";
 import FindingPanel from "../components/FindingPanel.jsx";
@@ -25,6 +25,11 @@ export default function BuildingDetail({
 }) {
   const [drawing, setDrawing] = useState("ov");
   const [mode, setMode] = useState("side");
+  // Which two rounds the comparison shows. The report's *numbers* are always
+  // baseline vs latest; this pair only drives the imagery, so staff can walk
+  // the drying story round by round.
+  const [fromRound, setFromRound] = useState(BASELINE.id);
+  const [toRound, setToRound] = useState(CURRENT.id);
   const [showVents, setShowVents] = useState(true);
   const [wipe, setWipe] = useState(50);
   const [placing, setPlacing] = useState(null);
@@ -93,7 +98,28 @@ export default function BuildingDetail({
   );
 
   const V = building.views?.[drawing] ?? {};
-  const scanAspect = V.postAspect || V.preAspect || "2 / 3";
+  const roundIndex = (id) => SCANS.findIndex((s) => s.id === id);
+  const fromScan = SCANS.find((s) => s.id === fromRound) ?? BASELINE;
+  const toScan = SCANS.find((s) => s.id === toRound) ?? CURRENT;
+  const fromImg = sectionImage(building.id, drawing, fromScan.id);
+  const toImg = sectionImage(building.id, drawing, toScan.id);
+  // Pins are placed against the latest scan's frame, so they only render when
+  // that is the frame being shown — on a historical round they would sit on an
+  // image with a different aspect and silently drift.
+  const showingCurrent = toScan.id === CURRENT.id;
+  const pickFrom = (id) => {
+    if (roundIndex(id) >= roundIndex(toRound)) {
+      setToRound(SCANS[Math.min(roundIndex(id) + 1, SCANS.length - 1)].id);
+    }
+    setFromRound(id);
+  };
+  const pickTo = (id) => {
+    if (roundIndex(id) <= roundIndex(fromRound)) {
+      setFromRound(SCANS[Math.max(roundIndex(id) - 1, 0)].id);
+    }
+    setToRound(id);
+  };
+  const scanAspect = toImg?.aspect || fromImg?.aspect || "2 / 3";
   const scanRatio = ratioOf(scanAspect);
   const wideRoof = mode === "side" && scanRatio > WIDE_ROOF;
 
@@ -461,6 +487,23 @@ export default function BuildingDetail({
             </SegBtn>
           </div>
 
+          {SCANS.length > 2 && (
+            <div
+              style={{
+                display: "flex",
+                alignItems: "center",
+                gap: 6,
+                fontSize: 13,
+                color: C.muted,
+              }}
+            >
+              Compare
+              <RoundSelect value={fromScan.id} onChange={pickFrom} />
+              to
+              <RoundSelect value={toScan.id} onChange={pickTo} />
+            </div>
+          )}
+
           {/* The vent panel only exists side by side, so its toggle does too. */}
           {mode === "side" && (
             <button onClick={() => setShowVents((v) => !v)} style={ghostBtn}>
@@ -480,7 +523,7 @@ export default function BuildingDetail({
 
           <div style={{ flex: 1 }} />
 
-          {canEdit && (
+          {canEdit && showingCurrent && (
             <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
               <button
                 onClick={() => {
@@ -566,12 +609,12 @@ export default function BuildingDetail({
                 }}
               >
                 <div>
-                  <FrameLabel title={BASELINE.label} note={BASELINE.date} />
+                  <FrameLabel title={fromScan.label} note={fromScan.date} />
                   <ScanFrame
                     aspect={scanAspect}
-                    src={V.pre}
-                    alt="Baseline scan"
-                    emptyLabel={V.pre ? null : "Baseline scan pending."}
+                    src={fromImg?.src}
+                    alt={fromScan.label}
+                    emptyLabel={fromImg ? null : `${fromScan.label} pending.`}
                   />
                 </div>
 
@@ -650,15 +693,15 @@ export default function BuildingDetail({
                 )}
 
                 <div>
-                  <FrameLabel title={CURRENT.label} note={CURRENT.date} />
+                  <FrameLabel title={toScan.label} note={toScan.date} />
                   <ScanFrame
                     aspect={scanAspect}
-                    src={V.post}
-                    alt="Latest scan"
-                    emptyLabel={V.post ? null : "Latest scan pending."}
+                    src={toImg?.src}
+                    alt={toScan.label}
+                    emptyLabel={toImg ? null : `${toScan.label} pending.`}
                   >
                     <div style={{ position: "absolute", inset: 0, pointerEvents: "none" }}>
-                      {markerOverlay}
+                      {showingCurrent && markerOverlay}
                     </div>
                   </ScanFrame>
                 </div>
@@ -666,18 +709,26 @@ export default function BuildingDetail({
             ) : (
               <WipeCompare
                 aspect={scanAspect}
-                pre={V.pre}
-                post={V.post}
+                pre={fromImg?.src}
+                post={toImg?.src}
                 wipe={wipe}
                 onWipe={setWipe}
+                fromScan={fromScan}
+                toScan={toScan}
               >
                 <div style={{ position: "absolute", inset: 0, pointerEvents: "none" }}>
-                  {markerOverlay}
+                  {showingCurrent && markerOverlay}
                 </div>
               </WipeCompare>
             )}
 
             <Legend showVents={ventPinsVisible} />
+
+            {!showingCurrent && (
+              <div style={{ marginTop: 8, fontSize: 13, color: C.muted }}>
+                Pins and proposed vents are shown on the latest scan ({CURRENT.label}).
+              </div>
+            )}
 
             {sectionVents.length > 0 && (
               <div style={{ marginTop: 14 }}>
@@ -873,7 +924,7 @@ export default function BuildingDetail({
 }
 
 /** Drag-to-reveal comparison. The pre scan is clipped over the post scan. */
-function WipeCompare({ aspect, pre, post, wipe, onWipe, children }) {
+function WipeCompare({ aspect, pre, post, wipe, onWipe, fromScan, toScan, children }) {
   const frameRef = useRef(null);
 
   const startDrag = (e) => {
@@ -906,14 +957,14 @@ function WipeCompare({ aspect, pre, post, wipe, onWipe, children }) {
           marginBottom: 6,
         }}
       >
-        <FrameLabel title={BASELINE.label} note={BASELINE.date} inline />
-        <FrameLabel title={CURRENT.label} note={CURRENT.date} inline />
+        <FrameLabel title={fromScan.label} note={fromScan.date} inline />
+        <FrameLabel title={toScan.label} note={toScan.date} inline />
       </div>
       <ScanFrame
         aspect={aspect}
         src={post}
-        alt="Latest scan"
-        emptyLabel={post ? null : "Latest scan pending."}
+        alt={toScan.label}
+        emptyLabel={post ? null : `${toScan.label} pending.`}
         maxHeight="64vh"
       >
         <div
@@ -947,7 +998,7 @@ function WipeCompare({ aspect, pre, post, wipe, onWipe, children }) {
                   fontWeight: 600,
                 }}
               >
-                Baseline scan pending
+                {`${fromScan.label} pending`}
               </div>
             )}
           </div>
@@ -1112,6 +1163,31 @@ function Stat({ label, value, color = C.navy, bordered }) {
       </div>
       <div style={{ fontSize: 17, fontWeight: 700, color, marginTop: 1 }}>{value}</div>
     </div>
+  );
+}
+
+function RoundSelect({ value, onChange }) {
+  return (
+    <select
+      value={value}
+      onChange={(e) => onChange(e.target.value)}
+      style={{
+        padding: "6px 8px",
+        border: `1px solid ${C.borderStrong}`,
+        borderRadius: 6,
+        fontSize: 13,
+        color: C.navy,
+        fontWeight: 600,
+        background: C.surface,
+        cursor: "pointer",
+      }}
+    >
+      {SCANS.map((s) => (
+        <option key={s.id} value={s.id}>
+          {s.label} · {s.date}
+        </option>
+      ))}
+    </select>
   );
 }
 
