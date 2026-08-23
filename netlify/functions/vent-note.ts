@@ -1,7 +1,7 @@
-import { eq } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 import { db } from "../../db/index";
 import { ventProposalReasons } from "../../db/schema";
-import { HttpError, handler, json, methodIs, readJson, requireUser } from "./_lib";
+import { HttpError, handler, json, methodIs, readJson, requireJobFrom, requireUser } from "./_lib";
 
 /**
  * The old per-building vent note.
@@ -16,7 +16,8 @@ import { HttpError, handler, json, methodIs, readJson, requireUser } from "./_li
  */
 export default handler(async (req: Request) => {
   methodIs(req, "PATCH");
-  await requireUser(req);
+  const job = await requireJobFrom(req);
+  await requireUser(req, job);
 
   const body = await readJson<Record<string, unknown>>(req);
   const building = String(body.building ?? "").trim();
@@ -24,15 +25,19 @@ export default handler(async (req: Request) => {
   const reason = String(body.reason ?? "").slice(0, 2000);
 
   if (!reason.trim()) {
-    await db.delete(ventProposalReasons).where(eq(ventProposalReasons.building, building));
+    await db
+      .delete(ventProposalReasons)
+      .where(
+        and(eq(ventProposalReasons.jobId, job.id), eq(ventProposalReasons.building, building)),
+      );
     return json({ building, reason: "" });
   }
 
   const [saved] = await db
     .insert(ventProposalReasons)
-    .values({ building, reason })
+    .values({ jobId: job.id, building, reason })
     .onConflictDoUpdate({
-      target: ventProposalReasons.building,
+      target: [ventProposalReasons.jobId, ventProposalReasons.building],
       set: { reason, updatedAt: new Date() },
     })
     .returning();

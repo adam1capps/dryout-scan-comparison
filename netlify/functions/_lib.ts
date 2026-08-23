@@ -1,4 +1,35 @@
 import { createClerkClient, verifyToken } from "@clerk/backend";
+import { eq, sql } from "drizzle-orm";
+import { db } from "../../db/index";
+import { jobs } from "../../db/schema";
+import type { Job } from "../../db/schema";
+
+export type { Job };
+
+/**
+ * Resolves which job a request addresses — once, at the top of every
+ * function, so tenancy is structural rather than a WHERE clause someone has
+ * to remember. A vanity hostname aliased onto the site wins; otherwise the
+ * ?job= slug the canonical client sends on every call. Unknown → 404: the
+ * platform fails closed on requests it cannot place.
+ */
+export async function requireJobFrom(req: Request): Promise<Job> {
+  const host = (req.headers.get("host") || "").toLowerCase().split(":")[0];
+  if (host) {
+    const [byHost] = await db
+      .select()
+      .from(jobs)
+      .where(sql`${jobs.hostnames} @> ${JSON.stringify([host])}::jsonb`)
+      .limit(1);
+    if (byHost) return byHost;
+  }
+  const slug = new URL(req.url).searchParams.get("job")?.trim().toLowerCase();
+  if (slug) {
+    const [bySlug] = await db.select().from(jobs).where(eq(jobs.slug, slug)).limit(1);
+    if (bySlug) return bySlug;
+  }
+  throw new HttpError(404, "Unknown report.");
+}
 
 /**
  * The access model for this site, in one place.
@@ -23,7 +54,7 @@ import { createClerkClient, verifyToken } from "@clerk/backend";
  * takes the allowlist away from every previous deploy at once, and they fail
  * closed. Any future fix to this function should rename it again.
  */
-export async function requireUser(req: Request): Promise<string> {
+export async function requireUser(req: Request, job?: Job): Promise<string> {
   const header = req.headers.get("authorization") || "";
   const token = header.startsWith("Bearer ") ? header.slice(7) : "";
   if (!token) throw new HttpError(401, "Sign in to make changes.");
@@ -35,6 +66,9 @@ export async function requireUser(req: Request): Promise<string> {
     .split(",")
     .map((e) => e.trim().toLowerCase())
     .filter(Boolean);
+  // Per-job editors extend the allowlist but never replace its fail-closed
+  // gate: with REPORT_EDITORS unset, nobody edits anything anywhere.
+  const jobEditors = (job?.editors ?? []).map((e) => String(e).trim().toLowerCase());
   if (allowed.length === 0) {
     throw new HttpError(
       403,
@@ -66,7 +100,7 @@ export async function requireUser(req: Request): Promise<string> {
   const emails = user.emailAddresses
     .filter((e) => e.verification?.status === "verified")
     .map((e) => e.emailAddress.toLowerCase());
-  if (!emails.some((e) => allowed.includes(e))) {
+  if (!emails.some((e) => allowed.includes(e) || jobEditors.includes(e))) {
     throw new HttpError(403, "That account is not permitted to edit this report.");
   }
 
@@ -81,10 +115,10 @@ export async function requireUser(req: Request): Promise<string> {
  * an anonymous read costs nothing extra — which matters, because that is the
  * common case on a public report.
  */
-export async function isEditor(req: Request): Promise<boolean> {
+export async function isEditor(req: Request, job?: Job): Promise<boolean> {
   if (!req.headers.get("authorization")) return false;
   try {
-    await requireUser(req);
+    await requireUser(req, job);
     return true;
   } catch {
     return false;
