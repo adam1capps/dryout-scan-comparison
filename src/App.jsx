@@ -6,7 +6,7 @@ import Lightbox from "./components/Lightbox.jsx";
 import ErrorBoundary from "./components/ErrorBoundary.jsx";
 import CampusOverview from "./screens/CampusOverview.jsx";
 import BuildingDetail from "./screens/BuildingDetail.jsx";
-import { findBuilding } from "./data/project.js";
+import { TERMS, findBuilding } from "./data/project.js";
 import { useAnnotations } from "./useAnnotations.js";
 import { useDeployVersion } from "./useDeployVersion.js";
 import { C } from "./theme.js";
@@ -92,7 +92,7 @@ function Shell({ canEdit, getToken, authEnabled = false }) {
             />
           </ErrorBoundary>
         ) : (
-          <ErrorBoundary label="The campus overview could not be displayed.">
+          <ErrorBoundary label={`The ${TERMS.site.toLowerCase()} overview could not be displayed.`}>
             <CampusOverview store={store} canEdit={canEdit} onOpenBuilding={openBuilding} />
           </ErrorBoundary>
         )}

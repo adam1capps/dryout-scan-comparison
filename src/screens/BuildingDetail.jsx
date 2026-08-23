@@ -1,12 +1,12 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { PROJECT } from "../data/project.js";
-import { C, card, fmtDate, fmtSF, pill, sectionHeading } from "../theme.js";
+import { BASELINE, CURRENT, PROJECT, SCANS, TERMS, sectionImage } from "../data/project.js";
+import { C, card, dryingTone, fmtDate, fmtSF, pill, sectionHeading } from "../theme.js";
 import ScanFrame, { PlacementLayer, markerStyle } from "../components/ScanFrame.jsx";
 import FindingPanel from "../components/FindingPanel.jsx";
 import { CameraIcon, CheckIcon } from "../components/icons.jsx";
 import VentRecap from "../components/VentRecap.jsx";
 import { categoryLabel, ventGlyph } from "../ventCategories.js";
-import { buildingScope, outOfScopeSf } from "../scope.js";
+import { buildingScope } from "../scope.js";
 
 /** A roof drawing wider than this is unreadable squeezed into a grid column. */
 const WIDE_ROOF = 2.2;
@@ -25,6 +25,11 @@ export default function BuildingDetail({
 }) {
   const [drawing, setDrawing] = useState("ov");
   const [mode, setMode] = useState("side");
+  // Which two rounds the comparison shows. The report's *numbers* are always
+  // baseline vs latest; this pair only drives the imagery, so staff can walk
+  // the drying story round by round.
+  const [fromRound, setFromRound] = useState(BASELINE.id);
+  const [toRound, setToRound] = useState(CURRENT.id);
   const [showVents, setShowVents] = useState(true);
   const [wipe, setWipe] = useState(50);
   const [placing, setPlacing] = useState(null);
@@ -88,12 +93,33 @@ export default function BuildingDetail({
   );
 
   const viewLabel = useCallback(
-    (v) => (v === "ov" ? (sections.length > 1 ? "Overview" : "Roof plan") : `Roof Section ${v}`),
+    (v) => (v === "ov" ? (sections.length > 1 ? "Overview" : "Roof plan") : `${TERMS.section} ${v}`),
     [sections.length],
   );
 
   const V = building.views?.[drawing] ?? {};
-  const scanAspect = V.postAspect || V.preAspect || "2 / 3";
+  const roundIndex = (id) => SCANS.findIndex((s) => s.id === id);
+  const fromScan = SCANS.find((s) => s.id === fromRound) ?? BASELINE;
+  const toScan = SCANS.find((s) => s.id === toRound) ?? CURRENT;
+  const fromImg = sectionImage(building.id, drawing, fromScan.id);
+  const toImg = sectionImage(building.id, drawing, toScan.id);
+  // Pins are placed against the latest scan's frame, so they only render when
+  // that is the frame being shown — on a historical round they would sit on an
+  // image with a different aspect and silently drift.
+  const showingCurrent = toScan.id === CURRENT.id;
+  const pickFrom = (id) => {
+    if (roundIndex(id) >= roundIndex(toRound)) {
+      setToRound(SCANS[Math.min(roundIndex(id) + 1, SCANS.length - 1)].id);
+    }
+    setFromRound(id);
+  };
+  const pickTo = (id) => {
+    if (roundIndex(id) <= roundIndex(fromRound)) {
+      setFromRound(SCANS[Math.max(roundIndex(id) - 1, 0)].id);
+    }
+    setToRound(id);
+  };
+  const scanAspect = toImg?.aspect || fromImg?.aspect || "2 / 3";
   const scanRatio = ratioOf(scanAspect);
   const wideRoof = mode === "side" && scanRatio > WIDE_ROOF;
 
@@ -232,7 +258,7 @@ export default function BuildingDetail({
   const downloadData = () => {
     const payload = {
       exported: new Date().toISOString(),
-      project: PROJECT.school,
+      project: PROJECT.name,
       findings: store.findings,
       proposedVents: store.proposals,
       collectVents: store.collect,
@@ -246,10 +272,10 @@ export default function BuildingDetail({
   };
 
   const scope = buildingScope(building, store.proposals);
-  const sectionOutOfScope = outOfScopeSf(store.proposals, building.id, drawing);
+  const tone = dryingTone(scope.pre, scope.postInScope);
   const hint = {
-    finding: "Click the post install scan to place the finding. Esc cancels.",
-    vent: "Click the post install scan to place vents. Click Done placing to stop.",
+    finding: "Click the latest scan to place the finding. Esc cancels.",
+    vent: "Click the latest scan to place vents. Click Done placing to stop.",
     collect:
       "Click each vent on the placement map to mark it for collection. Click a marker again to unmark it.",
   }[placing];
@@ -370,7 +396,7 @@ export default function BuildingDetail({
   return (
     <div>
       <button onClick={onBack} style={ghostBtn}>
-        &#8592; Back to campus
+        &#8592; Back to {TERMS.site.toLowerCase()}
       </button>
 
       <div
@@ -396,23 +422,23 @@ export default function BuildingDetail({
           }}
         >
           {/*
-            Same order and the same labels as the campus table: Pre-Install,
-            Change, Post Install, % Change, Additional Scope Found. A reader who
+            Same order and the same labels as the front-page table: Baseline,
+            Change, Latest Scan, % Change, Additional Scope Found. A reader who
             has learned to read the row on the front page should not have to
             learn it again here, and the walkthrough teaches it once.
           */}
-          <Stat label="Pre-Install" value={fmtSF(scope.pre)} />
+          <Stat label="Baseline" value={fmtSF(scope.pre)} />
           <Stat
             label="Change"
             value={`${scope.change.toLocaleString("en-US")} SF`}
-            color={C.greenInk}
+            color={tone.ink}
             bordered
           />
-          <Stat label="Post Install" value={fmtSF(scope.postInScope)} bordered />
+          <Stat label="Latest Scan" value={fmtSF(scope.postInScope)} bordered />
           <Stat
             label="% Change"
             value={`${scope.pct}%`}
-            color={C.greenInk}
+            color={tone.ink}
             bordered
           />
           {scope.outOfScope > 0 && (
@@ -433,7 +459,7 @@ export default function BuildingDetail({
           </Chip>
           {sections.map((id) => (
             <Chip key={id} active={drawing === id} onClick={() => goToDrawing(id)}>
-              Roof Section {id}
+              {TERMS.section} {id}
             </Chip>
           ))}
         </div>
@@ -461,6 +487,23 @@ export default function BuildingDetail({
             </SegBtn>
           </div>
 
+          {SCANS.length > 2 && (
+            <div
+              style={{
+                display: "flex",
+                alignItems: "center",
+                gap: 6,
+                fontSize: 13,
+                color: C.muted,
+              }}
+            >
+              Compare
+              <RoundSelect value={fromScan.id} onChange={pickFrom} />
+              to
+              <RoundSelect value={toScan.id} onChange={pickTo} />
+            </div>
+          )}
+
           {/* The vent panel only exists side by side, so its toggle does too. */}
           {mode === "side" && (
             <button onClick={() => setShowVents((v) => !v)} style={ghostBtn}>
@@ -474,13 +517,13 @@ export default function BuildingDetail({
             <div style={{ fontSize: 13, color: C.navy, fontWeight: 700 }}>
               {collectHere.length} marked on this roof section &middot;{" "}
               {collectInBuilding.length} in {building.name} &middot; {store.collect.length}{" "}
-              across the campus
+              across the {TERMS.site.toLowerCase()}
             </div>
           )}
 
           <div style={{ flex: 1 }} />
 
-          {canEdit && (
+          {canEdit && showingCurrent && (
             <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
               <button
                 onClick={() => {
@@ -566,12 +609,12 @@ export default function BuildingDetail({
                 }}
               >
                 <div>
-                  <FrameLabel title="Pre install" note={PROJECT.preDate} />
+                  <FrameLabel title={fromScan.label} note={fromScan.date} />
                   <ScanFrame
                     aspect={scanAspect}
-                    src={V.pre}
-                    alt="Pre install scan"
-                    emptyLabel={V.pre ? null : "Pre install scan pending."}
+                    src={fromImg?.src}
+                    alt={fromScan.label}
+                    emptyLabel={fromImg ? null : `${fromScan.label} pending.`}
                   />
                 </div>
 
@@ -650,15 +693,15 @@ export default function BuildingDetail({
                 )}
 
                 <div>
-                  <FrameLabel title="Post install" note={PROJECT.postDate} />
+                  <FrameLabel title={toScan.label} note={toScan.date} />
                   <ScanFrame
                     aspect={scanAspect}
-                    src={V.post}
-                    alt="Post install scan"
-                    emptyLabel={V.post ? null : "Post install scan pending."}
+                    src={toImg?.src}
+                    alt={toScan.label}
+                    emptyLabel={toImg ? null : `${toScan.label} pending.`}
                   >
                     <div style={{ position: "absolute", inset: 0, pointerEvents: "none" }}>
-                      {markerOverlay}
+                      {showingCurrent && markerOverlay}
                     </div>
                   </ScanFrame>
                 </div>
@@ -666,18 +709,26 @@ export default function BuildingDetail({
             ) : (
               <WipeCompare
                 aspect={scanAspect}
-                pre={V.pre}
-                post={V.post}
+                pre={fromImg?.src}
+                post={toImg?.src}
                 wipe={wipe}
                 onWipe={setWipe}
+                fromScan={fromScan}
+                toScan={toScan}
               >
                 <div style={{ position: "absolute", inset: 0, pointerEvents: "none" }}>
-                  {markerOverlay}
+                  {showingCurrent && markerOverlay}
                 </div>
               </WipeCompare>
             )}
 
             <Legend showVents={ventPinsVisible} />
+
+            {!showingCurrent && (
+              <div style={{ marginTop: 8, fontSize: 13, color: C.muted }}>
+                Pins and proposed vents are shown on the latest scan ({CURRENT.label}).
+              </div>
+            )}
 
             {sectionVents.length > 0 && (
               <div style={{ marginTop: 14 }}>
@@ -700,7 +751,6 @@ export default function BuildingDetail({
               finding={selected}
               viewLabel={viewLabel(selected?.view || "ov")}
               buildingName={building.name}
-              buildingId={building.id}
               onEdit={() => {
                 setDraft({ ...selected });
                 setPanel("form");
@@ -722,42 +772,6 @@ export default function BuildingDetail({
       {buildingVents.length > 0 && (
         <section style={{ ...card, padding: "20px 24px", marginBottom: 20 }}>
           <h2 style={sectionHeading}>Proposed vents</h2>
-          {canEdit && proposal?.reason?.trim() && (
-            <div
-              style={{
-                marginTop: 12,
-                border: `1px dashed ${C.borderStrong}`,
-                borderRadius: 8,
-                padding: "12px 14px",
-                background: C.surfaceAlt,
-              }}
-            >
-              <div
-                style={{
-                  fontSize: 11,
-                  fontWeight: 700,
-                  letterSpacing: "0.05em",
-                  textTransform: "uppercase",
-                  color: C.muted,
-                }}
-              >
-                Earlier note · staff only
-              </div>
-              <div style={{ fontSize: 14, color: C.ink, margin: "6px 0 10px" }}>
-                {proposal.reason}
-              </div>
-              <div style={{ fontSize: 12, color: C.muted, marginBottom: 10 }}>
-                Written before vents carried their own reasons, so it applies to the whole
-                building. Move it onto the vents it describes, then clear it.
-              </div>
-              <button
-                onClick={() => store.clearVentNote(building.id)}
-                style={{ ...ghostBtn, padding: "6px 11px", fontSize: 12 }}
-              >
-                Clear note
-              </button>
-            </div>
-          )}
 
           <div style={{ marginTop: 12 }}>
             <VentRecap
@@ -853,7 +867,7 @@ export default function BuildingDetail({
 
       {sections.length > 1 && (
         <section style={{ ...card, padding: "20px 24px", marginBottom: 20 }}>
-          <h2 style={sectionHeading}>Needs to dry by roof section</h2>
+          <h2 style={sectionHeading}>Needs to dry by {TERMS.section.toLowerCase()}</h2>
           <table
             style={{
               width: "100%",
@@ -874,7 +888,7 @@ export default function BuildingDetail({
                       fontWeight: 600,
                     }}
                   >
-                    Roof Section {id}
+                    {TERMS.section} {id}
                   </td>
                   <td
                     style={{
@@ -910,7 +924,7 @@ export default function BuildingDetail({
 }
 
 /** Drag-to-reveal comparison. The pre scan is clipped over the post scan. */
-function WipeCompare({ aspect, pre, post, wipe, onWipe, children }) {
+function WipeCompare({ aspect, pre, post, wipe, onWipe, fromScan, toScan, children }) {
   const frameRef = useRef(null);
 
   const startDrag = (e) => {
@@ -943,14 +957,14 @@ function WipeCompare({ aspect, pre, post, wipe, onWipe, children }) {
           marginBottom: 6,
         }}
       >
-        <FrameLabel title="Pre install" note={PROJECT.preDate} inline />
-        <FrameLabel title="Post install" note={PROJECT.postDate} inline />
+        <FrameLabel title={fromScan.label} note={fromScan.date} inline />
+        <FrameLabel title={toScan.label} note={toScan.date} inline />
       </div>
       <ScanFrame
         aspect={aspect}
         src={post}
-        alt="Post install scan"
-        emptyLabel={post ? null : "Post install scan pending."}
+        alt={toScan.label}
+        emptyLabel={post ? null : `${toScan.label} pending.`}
         maxHeight="64vh"
       >
         <div
@@ -960,7 +974,7 @@ function WipeCompare({ aspect, pre, post, wipe, onWipe, children }) {
             {pre ? (
               <img
                 src={pre}
-                alt="Pre install scan"
+                alt="Baseline scan"
                 draggable="false"
                 style={{
                   position: "absolute",
@@ -984,7 +998,7 @@ function WipeCompare({ aspect, pre, post, wipe, onWipe, children }) {
                   fontWeight: 600,
                 }}
               >
-                Pre install scan pending
+                {`${fromScan.label} pending`}
               </div>
             )}
           </div>
@@ -1152,6 +1166,31 @@ function Stat({ label, value, color = C.navy, bordered }) {
   );
 }
 
+function RoundSelect({ value, onChange }) {
+  return (
+    <select
+      value={value}
+      onChange={(e) => onChange(e.target.value)}
+      style={{
+        padding: "6px 8px",
+        border: `1px solid ${C.borderStrong}`,
+        borderRadius: 6,
+        fontSize: 13,
+        color: C.navy,
+        fontWeight: 600,
+        background: C.surface,
+        cursor: "pointer",
+      }}
+    >
+      {SCANS.map((s) => (
+        <option key={s.id} value={s.id}>
+          {s.label} · {s.date}
+        </option>
+      ))}
+    </select>
+  );
+}
+
 function Chip({ active, onClick, children }) {
   return (
     <button
@@ -1232,7 +1271,7 @@ function ventMapCaption(ventMap, building, drawing) {
   }
   if (ventMap) return "";
   if (drawing === "ov" && building.drawings > 1) {
-    return `${building.vents} installed across ${building.drawings} roof sections. Open one to see placement.`;
+    return `${building.vents} installed across ${building.drawings} ${TERMS.section.toLowerCase()}s. Open one to see placement.`;
   }
   return "Placement pending";
 }
