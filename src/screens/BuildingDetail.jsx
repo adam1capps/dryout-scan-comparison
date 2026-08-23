@@ -1,12 +1,12 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { PROJECT } from "../data/project.js";
-import { C, card, fmtDate, fmtSF, pill, sectionHeading } from "../theme.js";
+import { BASELINE, CURRENT, PROJECT, TERMS } from "../data/project.js";
+import { C, card, dryingTone, fmtDate, fmtSF, pill, sectionHeading } from "../theme.js";
 import ScanFrame, { PlacementLayer, markerStyle } from "../components/ScanFrame.jsx";
 import FindingPanel from "../components/FindingPanel.jsx";
 import { CameraIcon, CheckIcon } from "../components/icons.jsx";
 import VentRecap from "../components/VentRecap.jsx";
 import { categoryLabel, ventGlyph } from "../ventCategories.js";
-import { buildingScope, outOfScopeSf } from "../scope.js";
+import { buildingScope } from "../scope.js";
 
 /** A roof drawing wider than this is unreadable squeezed into a grid column. */
 const WIDE_ROOF = 2.2;
@@ -88,7 +88,7 @@ export default function BuildingDetail({
   );
 
   const viewLabel = useCallback(
-    (v) => (v === "ov" ? (sections.length > 1 ? "Overview" : "Roof plan") : `Roof Section ${v}`),
+    (v) => (v === "ov" ? (sections.length > 1 ? "Overview" : "Roof plan") : `${TERMS.section} ${v}`),
     [sections.length],
   );
 
@@ -232,7 +232,7 @@ export default function BuildingDetail({
   const downloadData = () => {
     const payload = {
       exported: new Date().toISOString(),
-      project: PROJECT.school,
+      project: PROJECT.name,
       findings: store.findings,
       proposedVents: store.proposals,
       collectVents: store.collect,
@@ -246,10 +246,10 @@ export default function BuildingDetail({
   };
 
   const scope = buildingScope(building, store.proposals);
-  const sectionOutOfScope = outOfScopeSf(store.proposals, building.id, drawing);
+  const tone = dryingTone(scope.pre, scope.postInScope);
   const hint = {
-    finding: "Click the post install scan to place the finding. Esc cancels.",
-    vent: "Click the post install scan to place vents. Click Done placing to stop.",
+    finding: "Click the latest scan to place the finding. Esc cancels.",
+    vent: "Click the latest scan to place vents. Click Done placing to stop.",
     collect:
       "Click each vent on the placement map to mark it for collection. Click a marker again to unmark it.",
   }[placing];
@@ -370,7 +370,7 @@ export default function BuildingDetail({
   return (
     <div>
       <button onClick={onBack} style={ghostBtn}>
-        &#8592; Back to campus
+        &#8592; Back to {TERMS.site.toLowerCase()}
       </button>
 
       <div
@@ -396,23 +396,23 @@ export default function BuildingDetail({
           }}
         >
           {/*
-            Same order and the same labels as the campus table: Pre-Install,
-            Change, Post Install, % Change, Additional Scope Found. A reader who
+            Same order and the same labels as the front-page table: Baseline,
+            Change, Latest Scan, % Change, Additional Scope Found. A reader who
             has learned to read the row on the front page should not have to
             learn it again here, and the walkthrough teaches it once.
           */}
-          <Stat label="Pre-Install" value={fmtSF(scope.pre)} />
+          <Stat label="Baseline" value={fmtSF(scope.pre)} />
           <Stat
             label="Change"
             value={`${scope.change.toLocaleString("en-US")} SF`}
-            color={C.greenInk}
+            color={tone.ink}
             bordered
           />
-          <Stat label="Post Install" value={fmtSF(scope.postInScope)} bordered />
+          <Stat label="Latest Scan" value={fmtSF(scope.postInScope)} bordered />
           <Stat
             label="% Change"
             value={`${scope.pct}%`}
-            color={C.greenInk}
+            color={tone.ink}
             bordered
           />
           {scope.outOfScope > 0 && (
@@ -433,7 +433,7 @@ export default function BuildingDetail({
           </Chip>
           {sections.map((id) => (
             <Chip key={id} active={drawing === id} onClick={() => goToDrawing(id)}>
-              Roof Section {id}
+              {TERMS.section} {id}
             </Chip>
           ))}
         </div>
@@ -474,7 +474,7 @@ export default function BuildingDetail({
             <div style={{ fontSize: 13, color: C.navy, fontWeight: 700 }}>
               {collectHere.length} marked on this roof section &middot;{" "}
               {collectInBuilding.length} in {building.name} &middot; {store.collect.length}{" "}
-              across the campus
+              across the {TERMS.site.toLowerCase()}
             </div>
           )}
 
@@ -566,12 +566,12 @@ export default function BuildingDetail({
                 }}
               >
                 <div>
-                  <FrameLabel title="Pre install" note={PROJECT.preDate} />
+                  <FrameLabel title={BASELINE.label} note={BASELINE.date} />
                   <ScanFrame
                     aspect={scanAspect}
                     src={V.pre}
-                    alt="Pre install scan"
-                    emptyLabel={V.pre ? null : "Pre install scan pending."}
+                    alt="Baseline scan"
+                    emptyLabel={V.pre ? null : "Baseline scan pending."}
                   />
                 </div>
 
@@ -650,12 +650,12 @@ export default function BuildingDetail({
                 )}
 
                 <div>
-                  <FrameLabel title="Post install" note={PROJECT.postDate} />
+                  <FrameLabel title={CURRENT.label} note={CURRENT.date} />
                   <ScanFrame
                     aspect={scanAspect}
                     src={V.post}
-                    alt="Post install scan"
-                    emptyLabel={V.post ? null : "Post install scan pending."}
+                    alt="Latest scan"
+                    emptyLabel={V.post ? null : "Latest scan pending."}
                   >
                     <div style={{ position: "absolute", inset: 0, pointerEvents: "none" }}>
                       {markerOverlay}
@@ -700,7 +700,6 @@ export default function BuildingDetail({
               finding={selected}
               viewLabel={viewLabel(selected?.view || "ov")}
               buildingName={building.name}
-              buildingId={building.id}
               onEdit={() => {
                 setDraft({ ...selected });
                 setPanel("form");
@@ -722,42 +721,6 @@ export default function BuildingDetail({
       {buildingVents.length > 0 && (
         <section style={{ ...card, padding: "20px 24px", marginBottom: 20 }}>
           <h2 style={sectionHeading}>Proposed vents</h2>
-          {canEdit && proposal?.reason?.trim() && (
-            <div
-              style={{
-                marginTop: 12,
-                border: `1px dashed ${C.borderStrong}`,
-                borderRadius: 8,
-                padding: "12px 14px",
-                background: C.surfaceAlt,
-              }}
-            >
-              <div
-                style={{
-                  fontSize: 11,
-                  fontWeight: 700,
-                  letterSpacing: "0.05em",
-                  textTransform: "uppercase",
-                  color: C.muted,
-                }}
-              >
-                Earlier note · staff only
-              </div>
-              <div style={{ fontSize: 14, color: C.ink, margin: "6px 0 10px" }}>
-                {proposal.reason}
-              </div>
-              <div style={{ fontSize: 12, color: C.muted, marginBottom: 10 }}>
-                Written before vents carried their own reasons, so it applies to the whole
-                building. Move it onto the vents it describes, then clear it.
-              </div>
-              <button
-                onClick={() => store.clearVentNote(building.id)}
-                style={{ ...ghostBtn, padding: "6px 11px", fontSize: 12 }}
-              >
-                Clear note
-              </button>
-            </div>
-          )}
 
           <div style={{ marginTop: 12 }}>
             <VentRecap
@@ -853,7 +816,7 @@ export default function BuildingDetail({
 
       {sections.length > 1 && (
         <section style={{ ...card, padding: "20px 24px", marginBottom: 20 }}>
-          <h2 style={sectionHeading}>Needs to dry by roof section</h2>
+          <h2 style={sectionHeading}>Needs to dry by {TERMS.section.toLowerCase()}</h2>
           <table
             style={{
               width: "100%",
@@ -874,7 +837,7 @@ export default function BuildingDetail({
                       fontWeight: 600,
                     }}
                   >
-                    Roof Section {id}
+                    {TERMS.section} {id}
                   </td>
                   <td
                     style={{
@@ -943,14 +906,14 @@ function WipeCompare({ aspect, pre, post, wipe, onWipe, children }) {
           marginBottom: 6,
         }}
       >
-        <FrameLabel title="Pre install" note={PROJECT.preDate} inline />
-        <FrameLabel title="Post install" note={PROJECT.postDate} inline />
+        <FrameLabel title={BASELINE.label} note={BASELINE.date} inline />
+        <FrameLabel title={CURRENT.label} note={CURRENT.date} inline />
       </div>
       <ScanFrame
         aspect={aspect}
         src={post}
-        alt="Post install scan"
-        emptyLabel={post ? null : "Post install scan pending."}
+        alt="Latest scan"
+        emptyLabel={post ? null : "Latest scan pending."}
         maxHeight="64vh"
       >
         <div
@@ -960,7 +923,7 @@ function WipeCompare({ aspect, pre, post, wipe, onWipe, children }) {
             {pre ? (
               <img
                 src={pre}
-                alt="Pre install scan"
+                alt="Baseline scan"
                 draggable="false"
                 style={{
                   position: "absolute",
@@ -984,7 +947,7 @@ function WipeCompare({ aspect, pre, post, wipe, onWipe, children }) {
                   fontWeight: 600,
                 }}
               >
-                Pre install scan pending
+                Baseline scan pending
               </div>
             )}
           </div>
@@ -1232,7 +1195,7 @@ function ventMapCaption(ventMap, building, drawing) {
   }
   if (ventMap) return "";
   if (drawing === "ov" && building.drawings > 1) {
-    return `${building.vents} installed across ${building.drawings} roof sections. Open one to see placement.`;
+    return `${building.vents} installed across ${building.drawings} ${TERMS.section.toLowerCase()}s. Open one to see placement.`;
   }
   return "Placement pending";
 }

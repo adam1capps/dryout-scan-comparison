@@ -1,33 +1,44 @@
 import { useMemo, useState } from "react";
-import { BUILDINGS, CAMPUS, PROJECT, VENT_STATUS_SUMMARY } from "../data/project.js";
+import {
+  BASELINE,
+  BUILDINGS,
+  CAMPUS,
+  FEATURES,
+  INSTALL,
+  PROJECT,
+  SCANS,
+  TERMS,
+  VENT_STATUS_SUMMARY,
+  findBuilding,
+} from "../data/project.js";
 import VentRecap from "../components/VentRecap.jsx";
 import QuoteIt from "../components/QuoteIt.jsx";
 import { allVents, summarise } from "../ventCategories.js";
 import { buildingScope, campusScope } from "../scope.js";
-import { C, card, fmtSF, sectionHeading, th } from "../theme.js";
+import { C, card, dryingTone, fmtSF, sectionHeading, th } from "../theme.js";
 
 const SORTABLE = [
-  { key: "id", label: "Section", align: "left" },
-  { key: "pre", label: "Pre-Install", align: "right" },
+  { key: "id", label: TERMS.unit, align: "left" },
+  { key: "pre", label: "Baseline", align: "right" },
   { key: "change", label: "Change", align: "right" },
-  { key: "post", label: "Post Install", align: "right" },
+  { key: "post", label: "Latest Scan", align: "right" },
   { key: "pct", label: "% Change", align: "right" },
   { key: "scope", label: "Additional Scope Found", align: "right" },
 ];
 
 const SORT_VALUE = {
-  id: (b, s) => b.id,
+  id: (b) => b.id,
   pre: (b, s) => s.pre,
   change: (b, s) => s.change,
   post: (b, s) => s.postInScope,
-  pct: (b, s) => s.change / s.pre,
+  pct: (b, s) => (s.pre ? s.change / s.pre : 0),
   scope: (b, s) => s.outOfScope,
 };
 
 const TIMELINE = [
-  { dot: C.navy, label: "Pre install scan", value: PROJECT.preDate },
-  { dot: C.orange, label: "System installed", value: "April 6 to April 10, 2026" },
-  { dot: C.green, label: "Post install scan", value: PROJECT.postDate },
+  { dot: C.navy, label: BASELINE.label, value: BASELINE.date },
+  { dot: C.orange, label: "System installed", value: INSTALL.range },
+  ...SCANS.slice(1).map((s) => ({ dot: C.green, label: s.label, value: s.date })),
 ];
 
 export default function CampusOverview({ store, canEdit, onOpenBuilding }) {
@@ -55,12 +66,15 @@ export default function CampusOverview({ store, canEdit, onOpenBuilding }) {
   }, [sortKey, sortDir, store.proposals]);
 
   const campus = campusScope(store.proposals);
+  const campusTone = dryingTone(campus.pre, campus.postInScope);
 
   const ventTotal = VENT_STATUS_SUMMARY.reduce((a, s) => a + s.count, 0);
   const ventStatusLine =
-    VENT_STATUS_SUMMARY.length === 1
-      ? `${ventTotal} Rapid-Vents installed April 6 to April 10, 2026.`
-      : `${VENT_STATUS_SUMMARY.map((s) => `${s.count} ${s.status}`).join(", ")}.`;
+    VENT_STATUS_SUMMARY.length === 0
+      ? ""
+      : VENT_STATUS_SUMMARY.length === 1
+        ? `${ventTotal} ${TERMS.ventProductPlural} installed ${INSTALL.range}.`
+        : `${VENT_STATUS_SUMMARY.map((s) => `${s.count} ${s.status}`).join(", ")}.`;
 
   // Only buildings that still carry pins count as a live proposal.
   const proposals = store.proposals.filter((p) => p.markers.length > 0);
@@ -90,7 +104,7 @@ export default function CampusOverview({ store, canEdit, onOpenBuilding }) {
               fontWeight: 700,
             }}
           >
-            {PROJECT.school}
+            {PROJECT.name}
           </h1>
           <div style={{ marginTop: 6, fontSize: 16, color: "#555" }}>{PROJECT.address}</div>
         </div>
@@ -154,7 +168,7 @@ export default function CampusOverview({ store, canEdit, onOpenBuilding }) {
       </div>
 
       <section style={{ ...card, padding: "22px 24px", marginBottom: 20 }}>
-        <h2 style={sectionHeading}>Campus result</h2>
+        <h2 style={sectionHeading}>{TERMS.site} result</h2>
         <div
           style={{
             display: "flex",
@@ -184,7 +198,7 @@ export default function CampusOverview({ store, canEdit, onOpenBuilding }) {
             style={{
               fontSize: 46,
               fontWeight: 700,
-              color: C.green,
+              color: campusTone.ink,
               letterSpacing: "-0.01em",
               lineHeight: 1,
             }}
@@ -193,8 +207,11 @@ export default function CampusOverview({ store, canEdit, onOpenBuilding }) {
           </span>
         </div>
         <div style={{ marginTop: 10, fontSize: 17, color: C.ink, fontWeight: 500 }}>
-          A {Math.abs(campus.pct)} percent reduction in the area within the original
-          scope of work.
+          {campus.change < 0
+            ? `A ${Math.abs(campus.pct)} percent reduction in the area within the original scope of work.`
+            : campus.change === 0
+              ? "No change yet in the area within the original scope of work."
+              : `A ${campus.pct} percent increase in the area within the original scope of work.`}
         </div>
         {/*
           Stated plainly and separately. The area is real and still wet — it was
@@ -217,7 +234,7 @@ export default function CampusOverview({ store, canEdit, onOpenBuilding }) {
               {fmtSF(campus.outOfScope)}
             </span>{" "}
             was identified outside the original scope of work. Those areas are
-            included in the {fmtSF(campus.postScanned)} measured by the June scan and
+            included in the {fmtSF(campus.postScanned)} measured by the latest scan and
             are covered by a proposed change order.
           </div>
         )}
@@ -263,6 +280,7 @@ export default function CampusOverview({ store, canEdit, onOpenBuilding }) {
           </thead>
           <tbody>
             {rows.map(({ b, s: sc }) => {
+              const tone = dryingTone(sc.pre, sc.postInScope);
               return (
                 <tr
                   key={b.id}
@@ -273,23 +291,23 @@ export default function CampusOverview({ store, canEdit, onOpenBuilding }) {
                   <Td className="cell-lead" style={{ fontWeight: 700, color: C.navy }}>
                     {b.name}
                   </Td>
-                  <Td align="right" label="Pre-Install">
+                  <Td align="right" label="Baseline">
                     {fmtSF(sc.pre)}
                   </Td>
                   <Td
                     align="right"
                     label="Change"
-                    style={{ color: C.greenInk, fontWeight: 600 }}
+                    style={{ color: tone.ink, fontWeight: 600 }}
                   >
                     {sc.change.toLocaleString("en-US")} SF
                   </Td>
-                  <Td align="right" label="Post Install">
+                  <Td align="right" label="Latest Scan">
                     {fmtSF(sc.postInScope)}
                   </Td>
                   <Td
                     align="right"
                     label="% Change"
-                    style={{ color: C.greenInk, fontWeight: 700 }}
+                    style={{ color: tone.ink, fontWeight: 700 }}
                   >
                     {sc.pct}%
                   </Td>
@@ -303,17 +321,17 @@ export default function CampusOverview({ store, canEdit, onOpenBuilding }) {
               );
             })}
             <tr className="row-total">
-              <TotalTd className="cell-lead">Campus total</TotalTd>
-              <TotalTd align="right" label="Pre-Install">
+              <TotalTd className="cell-lead">{TERMS.site} total</TotalTd>
+              <TotalTd align="right" label="Baseline">
                 {fmtSF(campus.pre)}
               </TotalTd>
-              <TotalTd align="right" label="Change" color={C.greenInk}>
+              <TotalTd align="right" label="Change" color={campusTone.ink}>
                 {campus.change.toLocaleString("en-US")} SF
               </TotalTd>
-              <TotalTd align="right" label="Post Install">
+              <TotalTd align="right" label="Latest Scan">
                 {fmtSF(campus.postInScope)}
               </TotalTd>
-              <TotalTd align="right" label="% Change" color={C.greenInk}>
+              <TotalTd align="right" label="% Change" color={campusTone.ink}>
                 {campus.pct}%
               </TotalTd>
               <TotalTd align="right" label="Additional Scope Found">
@@ -331,7 +349,9 @@ export default function CampusOverview({ store, canEdit, onOpenBuilding }) {
 
       <section style={{ ...card, padding: "22px 24px", marginBottom: 20 }}>
         <h2 style={sectionHeading}>Vents</h2>
-        <div style={{ marginTop: 12, fontSize: 15, color: C.ink }}>{ventStatusLine}</div>
+        {ventStatusLine && (
+          <div style={{ marginTop: 12, fontSize: 15, color: C.ink }}>{ventStatusLine}</div>
+        )}
 
         <div
           style={{
@@ -365,9 +385,9 @@ export default function CampusOverview({ store, canEdit, onOpenBuilding }) {
             >
               <thead>
                 <tr>
-                  <th style={{ ...th, padding: "9px 14px" }}>Section</th>
+                  <th style={{ ...th, padding: "9px 14px" }}>{TERMS.unit}</th>
                   <th style={{ ...th, padding: "9px 14px", textAlign: "right" }}>
-                    Roof sections
+                    {TERMS.section}s
                   </th>
                   <th style={{ ...th, padding: "9px 14px", textAlign: "right" }}>
                     Vents installed
@@ -399,9 +419,9 @@ export default function CampusOverview({ store, canEdit, onOpenBuilding }) {
                         pad="10px 14px"
                         style={{ fontWeight: 700, color: C.navy }}
                       >
-                        Building {b.id}
+                        {b.name}
                       </Td>
-                      <Td pad="10px 14px" align="right" label="Roof sections">
+                      <Td pad="10px 14px" align="right" label={`${TERMS.section}s`}>
                         {b.drawings}
                       </Td>
                       <Td pad="10px 14px" align="right" label="Vents installed">
@@ -430,7 +450,7 @@ export default function CampusOverview({ store, canEdit, onOpenBuilding }) {
                   <TotalTd className="cell-lead" pad="10px 14px">
                     Total
                   </TotalTd>
-                  <TotalTd pad="10px 14px" align="right" label="Roof sections">
+                  <TotalTd pad="10px 14px" align="right" label={`${TERMS.section}s`}>
                     {CAMPUS.drawings}
                   </TotalTd>
                   <TotalTd pad="10px 14px" align="right" label="Vents installed">
@@ -461,11 +481,11 @@ export default function CampusOverview({ store, canEdit, onOpenBuilding }) {
           >
             <img
               src="/assets/rapid-vent.png"
-              alt="Rapid-Vent unit"
+              alt={`${TERMS.ventProduct} unit`}
               style={{ maxHeight: 170, maxWidth: "100%", objectFit: "contain" }}
             />
             <div style={{ fontSize: 13, color: "#555", marginTop: 8 }}>
-              Rapid-Vent unit. Solar powered.
+              {TERMS.ventProduct} unit. Solar powered.
             </div>
           </div>
         </div>
@@ -482,7 +502,7 @@ export default function CampusOverview({ store, canEdit, onOpenBuilding }) {
                 <VentRecap
                   vents={allVents(proposals)}
                   canEdit={canEdit}
-                  title="Campus total"
+                  title={`${TERMS.site} total`}
                 />
               </div>
 
@@ -501,7 +521,7 @@ export default function CampusOverview({ store, canEdit, onOpenBuilding }) {
                     }}
                   >
                     <span style={{ fontWeight: 700, color: C.navy }}>
-                      Building {p.building}
+                      {findBuilding(p.building)?.name ?? p.building}
                     </span>
                     <span
                       style={{
@@ -556,55 +576,8 @@ export default function CampusOverview({ store, canEdit, onOpenBuilding }) {
         </div>
       </section>
 
-      <QuoteIt additionalSf={campus.outOfScope} />
+      {FEATURES.quoteIt && <QuoteIt additionalSf={campus.outOfScope} />}
 
-      {/*
-        A working checklist of what is still outstanding. It is addressed to the
-        crew, not to the school, so it is shown only to signed-in staff — the
-        client's view ends at the vents section.
-
-        Gated on canEdit rather than Clerk's <SignedIn>, so this screen renders
-        even when no Clerk provider is mounted. The read-only report must never
-        depend on auth being configured.
-      */}
-      {canEdit && (
-        <section
-          style={{
-            background: C.surface,
-            border: `1px dashed #c9cedb`,
-            borderRadius: 8,
-            padding: "18px 24px 20px",
-          }}
-        >
-          <div
-            style={{
-              fontSize: 12,
-              fontWeight: 700,
-              color: C.navy,
-              textTransform: "uppercase",
-              letterSpacing: "0.06em",
-            }}
-          >
-            Still outstanding
-          </div>
-          <ul
-            style={{
-              margin: "10px 0 0",
-              paddingLeft: 18,
-              color: "#555",
-              fontSize: 14,
-              lineHeight: 1.75,
-            }}
-          >
-            <li>
-              Pre and post install scans are in for every roof section. Replace one by
-              publishing a new image to the same path.
-            </li>
-            <li>Deficiency findings and photos. Add them with the pin tools inside each building.</li>
-            <li>Needs to dry figures per roof section.</li>
-          </ul>
-        </section>
-      )}
     </div>
   );
 }
@@ -632,7 +605,7 @@ function AdditionalScope({ sf, total }) {
       +{sf.toLocaleString("en-US")} SF
       <span className="tip-body" role="tooltip">
         This area sits <strong>outside the original scope of work</strong>. It was
-        found during the post-install scan and is not counted in the reduction
+        found during a later scan and is not counted in the reduction
         shown{total ? "" : " for this section"}. To have it priced, click{" "}
         <strong>Quote It</strong> at the bottom of the page.
       </span>

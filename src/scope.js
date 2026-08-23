@@ -50,8 +50,8 @@ export function buildingScope(building, proposals) {
 }
 
 /** The same figures for the whole property, summed from the buildings. */
-export function campusScope(proposals) {
-  const rows = BUILDINGS.map((b) => buildingScope(b, proposals));
+export function campusScope(proposals, buildings = BUILDINGS) {
+  const rows = buildings.map((b) => buildingScope(b, proposals));
   const pre = rows.reduce((a, r) => a + r.pre, 0);
   const postScanned = rows.reduce((a, r) => a + r.postScanned, 0);
   const outOfScope = rows.reduce((a, r) => a + r.outOfScope, 0);

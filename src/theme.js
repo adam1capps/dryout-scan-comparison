@@ -28,6 +28,29 @@ export const C = {
   chrome: "#9aa1b1",
 };
 
+/**
+ * The drying gradient — decision §11.6 in PLAN.md.
+ *
+ * A unit's progress color tracks how much of its BASELINE moisture is still
+ * in the substrate, moving red → orange → yellow → green as it dries toward
+ * the goal of 0 SF. It moves backward when a round measures wetter, and a
+ * unit sitting above its baseline is red, full stop — the old report's
+ * unconditional green ink on the Change/% cells dies here.
+ *
+ * The thresholds are a first proposal awaiting Adam's sign-off; they live
+ * only in this one place so tuning them is a one-line change.
+ */
+export const DRYING_THRESHOLDS = { green: 0.15, yellow: 0.45, orange: 0.8 };
+
+export function dryingTone(pre, postInScope) {
+  if (!(pre > 0)) return { key: "none", ink: C.muted };
+  const remaining = postInScope / pre;
+  if (remaining <= DRYING_THRESHOLDS.green) return { key: "green", ink: C.greenInk };
+  if (remaining <= DRYING_THRESHOLDS.yellow) return { key: "yellow", ink: "#8A6D03" };
+  if (remaining <= DRYING_THRESHOLDS.orange) return { key: "orange", ink: C.orangeInk };
+  return { key: "red", ink: "#C03A3A" };
+}
+
 /** Status pill colours: fill/border tint plus a darker ink for the label. */
 export function statusColors(status) {
   if (status === "Repaired") return { c: C.green, t: C.greenInk };
