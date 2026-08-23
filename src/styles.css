@@ -1,0 +1,222 @@
+/*
+ * The two things React inline styles cannot express: :hover and @media.
+ *
+ * Everything else stays inline next to the markup it belongs to. This file
+ * exists only for the cases the style prop structurally cannot reach, so it
+ * stays small and there is no ambiguity about where a rule lives.
+ */
+
+:root {
+  --navy: #1e2c55;
+  --green: #00bd70;
+  --border: #e2e4ea;
+  --border-soft: #eef0f4;
+  --muted: #6b7280;
+  --surface: #fff;
+}
+
+/* ---------------------------------------------------------------- hover --
+ * The prototype tinted clickable rows faint green. Inline styles have no
+ * :hover, so the affordance was lost in the port and the rows read as inert.
+ */
+.row-link {
+  transition: background 120ms ease;
+}
+.row-link:hover {
+  background: rgba(0, 189, 112, 0.05);
+}
+
+/* ------------------------------------------------------------ responsive --
+ * The report is shared by text message, so a phone is the common case, not the
+ * edge case. Below this width the data tables stop being tables: seven columns
+ * cannot be read on a 390px screen, and a sideways scroll to reach the last
+ * column is worse than no table at all.
+ */
+@media (max-width: 720px) {
+  /* Release the desktop floor so the table can shrink to the phone. */
+  .data-table {
+    min-width: 0 !important;
+  }
+
+  /* Headers become the per-cell labels below, so the row is redundant.
+     Kept in the accessibility tree rather than display:none. */
+  .data-table thead {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    padding: 0;
+    overflow: hidden;
+    clip: rect(0 0 0 0);
+    white-space: nowrap;
+    border: 0;
+  }
+
+  .data-table,
+  .data-table tbody,
+  .data-table tr,
+  .data-table td {
+    display: block;
+    width: auto;
+  }
+
+  /* Each row becomes a card. */
+  .data-table tbody tr {
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    margin: 0 0 10px;
+    background: var(--surface);
+    overflow: hidden;
+  }
+
+  /* Label on the left, value on the right, one line per field. */
+  .data-table tbody td {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 16px;
+    text-align: right !important;
+    padding: 9px 14px !important;
+    border: 0 !important;
+    border-bottom: 1px solid var(--border-soft) !important;
+  }
+  .data-table tbody td:last-child {
+    border-bottom: 0 !important;
+  }
+
+  .data-table tbody td[data-label]::before {
+    content: attr(data-label);
+    flex: none;
+    text-align: left;
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: 0.05em;
+    text-transform: uppercase;
+    color: var(--muted);
+  }
+
+  /* The row's own name leads the card, so it gets no label and more weight. */
+  .data-table tbody td.cell-lead {
+    background: #fafbfc;
+    font-size: 15px;
+    padding: 11px 14px !important;
+  }
+
+  /* The chevron only means "tap me" next to a pointer. On touch the whole
+     card is the target, so it is noise. */
+  .data-table .cell-chevron {
+    display: none !important;
+  }
+
+  /* The totals row is a summary, not another record — keep it flush and
+     visually distinct from the cards above it. */
+  .data-table tbody tr.row-total {
+    border: 0;
+    border-top: 2px solid var(--navy);
+    border-radius: 0;
+    background: transparent;
+    margin-top: 2px;
+  }
+  .data-table tbody tr.row-total td {
+    border-bottom: 0 !important;
+  }
+
+  /* Headline numbers that are sized for a wide card. */
+  .stat-hero {
+    font-size: 34px !important;
+  }
+  .stat-arrow {
+    font-size: 22px !important;
+  }
+  .page-title {
+    font-size: 26px !important;
+  }
+
+  /* The building stat strip is four cells in a row; let it wrap instead of
+     forcing a horizontal scroll. */
+  .stat-strip {
+    flex-wrap: wrap;
+  }
+}
+
+/* The editing panel sits beside the scans on a desktop. On a phone there is no
+ * beside — full width, below. */
+@media (max-width: 900px) {
+  .side-panel {
+    width: 100% !important;
+  }
+}
+
+/* ------------------------------------------------------------- tooltip --
+ * Explains a figure without spending permanent space on it. Inline styles
+ * cannot express :hover, so it lives here with the other two things they
+ * cannot reach.
+ */
+.tip {
+  position: relative;
+  cursor: help;
+  border-bottom: 1px dotted currentColor;
+}
+.tip .tip-body {
+  position: absolute;
+  /* Opens downward. Upward collided with the sticky table header on the first
+     row, which is the row most likely to be hovered first. */
+  top: calc(100% + 8px);
+  right: 0;
+  width: 268px;
+  background: var(--navy);
+  color: #fff;
+  border-radius: 8px;
+  padding: 11px 13px;
+  font-size: 12.5px;
+  font-weight: 400;
+  line-height: 1.5;
+  letter-spacing: 0;
+  text-align: left;
+  text-transform: none;
+  box-shadow: 0 8px 26px rgba(0, 0, 0, 0.26);
+  opacity: 0;
+  visibility: hidden;
+  transform: translateY(-3px);
+  transition: opacity 120ms ease, transform 120ms ease, visibility 120ms;
+  z-index: 40;
+  pointer-events: none;
+}
+.tip:hover .tip-body,
+.tip:focus-visible .tip-body {
+  opacity: 1;
+  visibility: visible;
+  transform: translateY(0);
+}
+/* Little pointer up to the figure it describes. */
+.tip .tip-body::after {
+  content: "";
+  position: absolute;
+  bottom: 100%;
+  right: 18px;
+  border: 6px solid transparent;
+  border-bottom-color: var(--navy);
+}
+
+/* On a phone the row is a stacked card and there is no hover, so the
+   explanation is shown outright rather than hidden behind an interaction
+   that does not exist. */
+@media (max-width: 720px) {
+  .tip {
+    border-bottom: 0;
+    cursor: default;
+  }
+  .tip .tip-body {
+    position: static;
+    width: auto;
+    opacity: 1;
+    visibility: visible;
+    transform: none;
+    margin-top: 6px;
+    box-shadow: none;
+    background: rgba(30, 44, 85, 0.06);
+    color: #333;
+  }
+  .tip .tip-body::after {
+    display: none;
+  }
+}

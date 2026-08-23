@@ -1,0 +1,14 @@
+node_modules
+dist
+.netlify
+.env
+.env.*
+!.env.example
+.DS_Store
+
+# Raw scan uploads never land in git — jobs are onboarded through the wizard
+# (PLAN.md Phase 3) and their images live in Netlify Blobs.
+uploads
+
+# Local tooling cache
+.impeccable

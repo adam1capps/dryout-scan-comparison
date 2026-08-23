@@ -1,0 +1,13 @@
+{
+  "$schema": "./node_modules/oxlint/configuration_schema.json",
+  "env": {
+    "browser": true,
+    "node": true,
+    "es2024": true
+  },
+  "rules": {
+    "no-undef": "error",
+    "no-unused-vars": "warn"
+  },
+  "ignorePatterns": ["dist", "design", "netlify/database", "public"]
+}

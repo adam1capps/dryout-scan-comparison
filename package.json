@@ -1,0 +1,31 @@
+{
+  "name": "dryout-scan-comparison",
+  "private": true,
+  "version": "1.0.0",
+  "type": "module",
+  "scripts": {
+    "dev": "netlify dev",
+    "vite": "vite",
+    "build": "oxlint src netlify && vite build",
+    "preview": "vite preview",
+    "db:generate": "drizzle-kit generate",
+    "db:migrate": "netlify database migrations apply",
+    "lint": "oxlint src netlify",
+    "backup": "node tools/backup.mjs"
+  },
+  "dependencies": {
+    "@clerk/backend": "^3.13.1",
+    "@clerk/clerk-react": "^5.61.3",
+    "@netlify/blobs": "^10.7.10",
+    "@netlify/database": "^1.1.0",
+    "drizzle-orm": "^1.0.0-beta.22",
+    "react": "^19.2.7",
+    "react-dom": "^19.2.7"
+  },
+  "devDependencies": {
+    "@vitejs/plugin-react": "^6.0.3",
+    "drizzle-kit": "^1.0.0-beta.22",
+    "oxlint": "^1.76.0",
+    "vite": "^8.1.1"
+  }
+}

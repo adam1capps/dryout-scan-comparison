@@ -1,0 +1,35 @@
+[build]
+  command = "npm run build"
+  publish = "dist"
+  functions = "netlify/functions"
+
+[functions]
+  node_bundler = "esbuild"
+
+# Must precede the SPA catch-all, or /api/* returns index.html.
+[[redirects]]
+  from = "/api/*"
+  to = "/.netlify/functions/:splat"
+  status = 200
+
+[[redirects]]
+  from = "/*"
+  to = "/index.html"
+  status = 200
+
+# The JS bundle is content-hashed by Vite, so a change always lands on a new
+# filename and the old one can be cached forever.
+[[headers]]
+  for = "/_app/*"
+  [headers.values]
+    Cache-Control = "public, max-age=31536000, immutable"
+
+# The roof scans are NOT content-addressed — a rescan republishes over the same
+# path (see README, "Publishing new scans"). Caching them immutably would mean
+# anyone who had already opened the report kept seeing the old scan for a year.
+# max-age=0 with revalidation still costs almost nothing: Netlify serves an
+# ETag, so an unchanged image answers 304 with no body.
+[[headers]]
+  for = "/assets/*"
+  [headers.values]
+    Cache-Control = "public, max-age=0, must-revalidate"
