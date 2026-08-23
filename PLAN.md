@@ -296,9 +296,11 @@ snapshot principle `quote_requests.additionalSf` already uses — a CO must be t
 to the figures the client saw). Timestamps: `sentAt`, `viewedAt`, `decidedAt`, plus
 decider name/title.
 
-**Pricing.** Per-job config on the jobs row: rate per additional SF (aligned to the
-existing 50-SF stepping), optional per-vent rate, and standard terms text. Defaults live
-at the platform level; the wizard asks only for deviations.
+**Pricing.** Two platform-default options (decision §11.9), selectable per change
+order, with per-job overrides: **Lease Per Unit at $750/unit**, or **$2 per SF with a
+$2,500 minimum** (installed on the next scan visit). SF line items align to the
+existing 50-SF stepping. Standard terms text lives at the platform level; the wizard
+asks only for deviations.
 
 **Flow.**
 1. Staff open "Create change order" on a job → line items prefill from the current
@@ -310,9 +312,9 @@ at the platform level; the wizard asks only for deviations.
    stamping as quote requests) to the client contact, with a link back to the report's
    change-order page.
 4. The client opens it in the report (marks `viewedAt`) and accepts or declines in
-   place — typed name + title + timestamp recorded; both sides get the confirmation
-   email with the PDF attached. Click-to-accept is the default; e-signature is a
-   swappable step if required (question 10 below).
+   place with a **legal e-signature in the ReDry Proposal Builder's format** (decision
+   §11.10 — same fields, consent language, and record shape as that app's `/accept`
+   flow); both sides get the confirmation email with the PDF attached.
 5. Accepted COs show on the report (client-visible) and adjust the "original scope"
    baseline for subsequent rounds — dried area that was bought via CO counts as
    in-scope from its acceptance date forward.
@@ -381,9 +383,9 @@ per-building SF, save — the report updates live. **Each change order:** prefil
 
 ## 9. Build phases
 
-- **Phase 0 — Decisions & pre-flight**: answer the questions in §11; confirm SendGrid
-  domain auth; confirm Netlify plan (Pro assumed); pick canonical URL scheme. Create and
-  seed `dryout-scan-comparison` (§4).
+- **Phase 0 — Decisions & pre-flight**: **DONE 2026-08-23** — repo seeded, all eleven
+  decisions locked (§11). Still open on Adam's side: confirm SendGrid domain
+  authentication in the dashboard.
 - **Phase 1 — Extract the template core** (in the new repo): config-driven refactor
   (schema in §2/§3: terminology, features, units, copy), **multi-round scans data
   model**, parameterize `scope.js`, string sweep, generated `index.html` head + OG card
@@ -415,36 +417,46 @@ repo gets only: this plan, plus (if approved) the standalone fixes below.
    4 vs live 6), personal residue (`adam@capps.co`, sample client copy), and names of
    other private repos.
 
-## 11. Questions for Adam (only these block execution)
+## 11. Decisions — locked by Adam, 2026-08-23
 
-1. **Architecture** — OK with one multi-tenant app (recommended), or is hard per-client
-   isolation a contractual requirement (→ clone-per-job with a scripted factory,
-   accepted 50-job ceiling)?
-2. **URLs** — canonical `reports.re-dry.com/<slug>` with optional vanity
-   `<job>.re-dry.com` aliases (recommended), or vanity-only?
-3. **McCallum** — plan for eventual import + CNAME flip (recommended, Phase 6), or
-   freeze it on the current site forever?
-4. **Editors** — is it always just you, or do crews/client PMs get per-job edit access?
-5. **Scope baseline** — is contracted scope always identical to the baseline-scan
-   wet+damp figure, or do some jobs need a separate scope-SF field? (Accepted change
-   orders will extend the in-scope baseline either way — §6.)
-6. **Worsening rounds** — wording/color when a building got wetter between rounds
-   (today it renders green and says "reduction")?
-7. **Terminology** — one configurable word-set per job (recommended), with what
-   defaults for non-campus properties?
-8. **Quote It** — on every job by default (it already self-hides at 0 SF), or opt-in?
-9. **Change-order pricing** — how is additional scope priced: rate per SF, per vent,
-   or quoted job-by-job? One platform default with per-job overrides (recommended), or
-   always manual line items?
-10. **Change-order acceptance** — is click-to-accept in the report (typed name + title,
-    timestamped, PDF confirmation to both sides) sufficient, or do some clients require
-    a real e-signature provider?
-11. **Change-order document** — do you have a current change-order form whose layout
-    the generated PDF should match, or should it be designed fresh on the ReDry brand
-    templates?
+All eleven gating questions are answered. These are binding for the build:
 
-Non-blocking (defaults will be used unless overridden): per-section SF as an optional
+1. **Architecture: one multi-tenant app.** Confirmed.
+2. **URLs: canonical `reports.re-dry.com/<slug>`** with optional vanity
+   `<job>.re-dry.com` aliases per job.
+3. **McCallum: freeze for now, decide later.** The live report stays exactly where it
+   is. The Phase 6 cutover (import as job #1, pin-for-pin diff, CNAME flip — invisible
+   to viewers, same URL, rollback week) stays on the shelf until the platform has run
+   2–3 real jobs. Nothing before Phase 6 touches it.
+4. **Editors: Abby and Regina edit**, in addition to Adam. Per-job editor lists are
+   required (Phase 2); the wizard collects editor emails per job; `REPORT_EDITORS`
+   stays as the global super-admin list.
+5. **Scope baseline ≡ baseline scan, always.** No separate scope-SF field. Accepted
+   change orders extend the in-scope baseline from their acceptance date.
+6. **Progress color is a gradient, never unconditional green.** Green means moisture
+   left the substrate; the goal is 0 SF. Each building's status moves along
+   **red → orange → yellow → green** as it dries, and backward when it gets wetter.
+   Implementation: color the Change/% cells and the per-round trend by remaining
+   in-scope moisture relative to the baseline (thresholds proposed in Phase 1 for
+   Adam's sign-off; the McCallum bug of green ink on a worsening building dies here).
+   "Reduction" wording is used only when moisture actually went down.
+7. **Terminology defaults: Location → Building → Roof Section 1, 2, 3…** (per-job
+   overrides remain available in the manifest).
+8. **Quote It: on for every job by default** (self-hides at 0 SF as today).
+9. **Change-order pricing — two platform-default options**, selectable per change
+   order (per-job overrides allowed):
+   - **Lease Per Unit** — $750 per unit.
+   - **Per square foot** — $2 per SF with a **$2,500 minimum**, installed on the next
+     scan visit.
+10. **Acceptance: legal e-signature collected in-app**, in the same format as the
+    ReDry Proposal Builder (`adam1capps/redry-proposal-app`) — its `/accept` flow is
+    the reference implementation (fields captured, consent language, record format).
+11. **Change-order document: generated**, following the Proposal Builder's ReportLab
+    document format (the L.D. Tebben-style branded layout). The extraction of both
+    formats into a build spec is in `docs/proposal-app-extraction.md` (produced from
+    the proposal app's source).
+
+Non-blocking defaults in effect unless Adam overrides: per-section SF as an optional
 field feeding the currently-"Pending" table; vent status vocabulary beyond "Installed";
-OG regeneration policy (recommend: regenerate on every manifest save); deep links
-(recommend: hash routing `#/b/B/3`); operational caps (10-min cooldown, 4 MB photos)
-stay global.
+OG regeneration on every manifest save; deep links via hash routing (`#/b/B/3`);
+operational caps (10-min cooldown, 4 MB photos) stay global.
