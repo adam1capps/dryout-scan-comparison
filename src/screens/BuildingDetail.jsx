@@ -107,15 +107,18 @@ export default function BuildingDetail({
   // that is the frame being shown — on a historical round they would sit on an
   // image with a different aspect and silently drift.
   const showingCurrent = toScan.id === CURRENT.id;
+  // From can never be the last round and To can never be the first (the
+  // selects' option lists enforce it), so the nudges below always land on a
+  // real neighbour and the pair can never collapse to one round.
   const pickFrom = (id) => {
     if (roundIndex(id) >= roundIndex(toRound)) {
-      setToRound(SCANS[Math.min(roundIndex(id) + 1, SCANS.length - 1)].id);
+      setToRound(SCANS[roundIndex(id) + 1].id);
     }
     setFromRound(id);
   };
   const pickTo = (id) => {
     if (roundIndex(id) <= roundIndex(fromRound)) {
-      setFromRound(SCANS[Math.max(roundIndex(id) - 1, 0)].id);
+      setFromRound(SCANS[roundIndex(id) - 1].id);
     }
     setToRound(id);
   };
@@ -498,9 +501,9 @@ export default function BuildingDetail({
               }}
             >
               Compare
-              <RoundSelect value={fromScan.id} onChange={pickFrom} />
+              <RoundSelect value={fromScan.id} onChange={pickFrom} options={SCANS.slice(0, -1)} />
               to
-              <RoundSelect value={toScan.id} onChange={pickTo} />
+              <RoundSelect value={toScan.id} onChange={pickTo} options={SCANS.slice(1)} />
             </div>
           )}
 
@@ -1166,7 +1169,7 @@ function Stat({ label, value, color = C.navy, bordered }) {
   );
 }
 
-function RoundSelect({ value, onChange }) {
+function RoundSelect({ value, onChange, options }) {
   return (
     <select
       value={value}
@@ -1182,7 +1185,7 @@ function RoundSelect({ value, onChange }) {
         cursor: "pointer",
       }}
     >
-      {SCANS.map((s) => (
+      {options.map((s) => (
         <option key={s.id} value={s.id}>
           {s.label} · {s.date}
         </option>
