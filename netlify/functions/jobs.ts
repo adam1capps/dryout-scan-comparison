@@ -16,7 +16,7 @@ import { HttpError, handler, json, methodIs, readJson, requireUser } from "./_li
 const SLUG = /^[a-z0-9][a-z0-9-]{1,62}$/;
 
 function readStrings(value: unknown, label: string, max: number): string[] {
-  if (value === undefined) return [];
+  if (value === undefined || value === null) return [];
   if (!Array.isArray(value)) throw new HttpError(400, `${label} must be a list.`);
   if (value.length > max) throw new HttpError(400, `${label} is too long.`);
   return value.map((v) => String(v).trim().toLowerCase()).filter(Boolean);
@@ -47,20 +47,20 @@ export default handler(async (req: Request) => {
     throw new HttpError(400, "slug must be 2-63 characters of a-z, 0-9 and hyphens.");
   }
 
-  const values = {
-    slug,
-    hostnames: readStrings(body.hostnames, "hostnames", 20),
-    editors: readStrings(body.editors, "editors", 50),
-    config: readObject(body.config, "config"),
-    manifest: readObject(body.manifest, "manifest"),
-  };
+  // Only fields present in the body are written — a manifest-only save must
+  // never wipe a job's editors, hostnames, or comms config.
+  const patch: Record<string, unknown> = {};
+  if ("hostnames" in body) patch.hostnames = readStrings(body.hostnames, "hostnames", 20);
+  if ("editors" in body) patch.editors = readStrings(body.editors, "editors", 50);
+  if ("config" in body) patch.config = readObject(body.config, "config");
+  if ("manifest" in body) patch.manifest = readObject(body.manifest, "manifest");
 
   const [saved] = await db
     .insert(jobs)
-    .values(values)
+    .values({ slug, ...patch })
     .onConflictDoUpdate({
       target: jobs.slug,
-      set: { ...values, updatedAt: new Date() },
+      set: { ...patch, updatedAt: new Date() },
     })
     .returning();
   return json(saved, 201);

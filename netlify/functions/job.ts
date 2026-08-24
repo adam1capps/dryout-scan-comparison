@@ -1,7 +1,9 @@
 import { handler, json, methodIs, requireJobFrom } from "./_lib";
 
 /**
- * The public read of one job: the manifest the report renders from.
+ * The public read of one job: the manifest the report will boot from once the
+ * client loads it at runtime (Phase 3 — today the report still ships a static
+ * demo manifest, and this endpoint serves the wizard and API consumers).
  *
  * Editors, notify addresses, and the rest of the operational config stay
  * server-side — the public gets exactly what the printed report would show.

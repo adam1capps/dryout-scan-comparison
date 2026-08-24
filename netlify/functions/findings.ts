@@ -47,11 +47,22 @@ export default handler(async (req: Request) => {
   const job = await requireJobFrom(req);
   await requireUser(req, job);
 
+  // photoKey names a blob in the shared store, and the keys are public (the
+  // annotations read serves them to everyone). Without this check an editor
+  // could reference — and on delete, drop — another job's photo bytes.
+  const ownPhoto = (key: string | null) => {
+    if (key && !key.startsWith(`${job.id}/`)) {
+      throw new HttpError(400, "That photo does not belong to this report.");
+    }
+  };
+
   if (method === "POST") {
     const body = await readJson<Record<string, unknown>>(req);
+    const fields = readBody(body);
+    ownPhoto(fields.photoKey);
     const [created] = await db
       .insert(findings)
-      .values({ jobId: job.id, ...readPin(body), ...readBody(body) })
+      .values({ jobId: job.id, ...readPin(body), ...fields })
       .returning();
     return json(created, 201);
   }
@@ -68,6 +79,7 @@ export default handler(async (req: Request) => {
     if (!existing) throw new HttpError(404, "That finding no longer exists.");
 
     const next = readBody(body);
+    ownPhoto(next.photoKey);
     // Swapping or clearing the photo leaves the old blob unreferenced.
     if (existing.photoKey && existing.photoKey !== next.photoKey) {
       await dropPhoto(existing.photoKey);

@@ -84,10 +84,6 @@ export const deleteFinding = (id, getToken) =>
 export const createProposedVent = (pin, getToken) =>
   send("/api/proposed-vents", { method: "POST", body: pin, getToken });
 
-/** Edits or clears a carry-over per-building vent note. */
-export const setVentNote = (building, reason, getToken) =>
-  send("/api/vent-note", { method: "PATCH", body: { building, reason }, getToken });
-
 /** Updates one vent's category, note or square footage. */
 export const updateProposedVent = (id, fields, getToken) =>
   send(`/api/proposed-vents?id=${id}`, { method: "PATCH", body: fields, getToken });
