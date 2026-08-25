@@ -15,7 +15,7 @@
  * Host header; the canonical reports.re-dry.com/<slug> path carries the slug
  * here. Falls back to "demo" so local development works from the root path.
  */
-const JOB = (() => {
+export const JOB = (() => {
   try {
     const seg = window.location.pathname.split("/").filter(Boolean)[0];
     return seg ? seg.toLowerCase() : "demo";
@@ -71,6 +71,17 @@ async function send(path, { method = "GET", body, getToken, contentType } = {}) 
  * callers. Anonymous reads send no Authorization header at all.
  */
 export const loadAnnotations = (getToken) => send("/api/annotations", { getToken });
+
+/** The job's manifest and public config — fetched before the app mounts. */
+export const loadJob = () => send("/api/job");
+
+/**
+ * Uploads a roof scan or vent map for the wizard. NOT shrunk — scan imagery
+ * must stay pixel-exact, because the stored aspect ratio is what keeps every
+ * saved pin on the same spot of the roof.
+ */
+export const uploadAsset = (file, getToken) =>
+  send("/api/assets", { method: "POST", body: file, contentType: file.type, getToken });
 
 export const createFinding = (finding, getToken) =>
   send("/api/findings", { method: "POST", body: finding, getToken });
