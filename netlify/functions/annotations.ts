@@ -1,4 +1,4 @@
-import { asc } from "drizzle-orm";
+import { and, asc, eq } from "drizzle-orm";
 import { db } from "../../db/index";
 import {
   collectMarks,
@@ -6,7 +6,7 @@ import {
   proposedVents,
   ventProposalReasons,
 } from "../../db/schema";
-import { handler, isEditor, json, methodIs } from "./_lib";
+import { handler, isEditor, json, methodIs, requireJobFrom } from "./_lib";
 
 /**
  * The client's single read: everything annotated on this project.
@@ -25,13 +25,22 @@ export default handler(async (req: Request) => {
    * would hand it to the public anyway, which is the readership the report is
    * shared with.
    */
-  const editor = await isEditor(req);
+  const job = await requireJobFrom(req);
+  const editor = await isEditor(req, job);
 
   const [rawFindings, rawVents, rawReasons, rawCollect] = await Promise.all([
-    db.select().from(findings).orderBy(asc(findings.id)),
-    db.select().from(proposedVents).orderBy(asc(proposedVents.id)),
-    db.select().from(ventProposalReasons),
-    db.select().from(collectMarks).orderBy(asc(collectMarks.id)),
+    db.select().from(findings).where(eq(findings.jobId, job.id)).orderBy(asc(findings.id)),
+    db
+      .select()
+      .from(proposedVents)
+      .where(eq(proposedVents.jobId, job.id))
+      .orderBy(asc(proposedVents.id)),
+    db.select().from(ventProposalReasons).where(eq(ventProposalReasons.jobId, job.id)),
+    db
+      .select()
+      .from(collectMarks)
+      .where(and(eq(collectMarks.jobId, job.id)))
+      .orderBy(asc(collectMarks.id)),
   ]);
 
   const reasonFor = new Map(rawReasons.map((r) => [r.building, r.reason]));

@@ -1,17 +1,15 @@
-import { desc, eq, sql } from "drizzle-orm";
+import { and, desc, eq, sql } from "drizzle-orm";
 import { db } from "../../db/index";
 import { proposedVents, quoteRequests } from "../../db/schema";
-import { HttpError, handler, json, methodIs, readJson } from "./_lib";
+import type { Job } from "./_lib";
+import { HttpError, handler, json, methodIs, readJson, requireJobFrom } from "./_lib";
 
-// Per-job values — move to the jobs table in PLAN.md Phase 2.
-const JOB_NAME = "Demo Property";
-const REPORT_URL = "https://reports.re-dry.com/demo";
-/** Must be a verified sender in SendGrid or the send is rejected. */
-const FROM = { email: "adam@re-dry.com", name: "ReDry" };
-const NOTIFY = "adam@re-dry.com";
-
-/** Same address cannot re-request inside this window. */
+/** Same address cannot re-request inside this window, per job. */
 const COOLDOWN_MINUTES = 10;
+
+/** Platform-level fallbacks; a job's config row overrides any of them. */
+const DEFAULT_NOTIFY = "adam@re-dry.com";
+const DEFAULT_FROM = { email: "adam@re-dry.com", name: "ReDry" };
 
 const esc = (s: string) =>
   s.replace(/[&<>"']/g, (c) =>
@@ -23,6 +21,21 @@ function field(body: Record<string, unknown>, key: string, max: number): string 
   if (!value) throw new HttpError(400, `${key} is required.`);
   if (value.length > max) throw new HttpError(400, `${key} is too long.`);
   return value;
+}
+
+/** The comms identity for one job, config-driven with platform fallbacks. */
+function comms(job: Job) {
+  const cfg = (job.config ?? {}) as Record<string, unknown>;
+  return {
+    jobName: String(cfg.name ?? job.slug),
+    reportUrl: String(cfg.publicUrl ?? `https://reports.re-dry.com/${job.slug}`),
+    notify: String(cfg.notifyEmail ?? DEFAULT_NOTIFY),
+    notifyName: String(cfg.notifyName ?? "ReDry"),
+    from: {
+      email: String(cfg.fromEmail ?? DEFAULT_FROM.email),
+      name: String(cfg.fromName ?? DEFAULT_FROM.name),
+    },
+  };
 }
 
 async function send(payload: unknown): Promise<void> {
@@ -48,7 +61,7 @@ async function send(payload: unknown): Promise<void> {
  * A client asking to be quoted for the work outside the original scope.
  *
  * Public and unauthenticated, because the person who needs to press it is the
- * school — they have no account and never will. That makes it the one endpoint
+ * client — they have no account and never will. That makes it the one endpoint
  * on this site an anonymous caller can cause a side effect with, so it is
  * validated tightly, carries a honeypot, and refuses repeat submissions from an
  * address inside a short window.
@@ -58,6 +71,8 @@ async function send(payload: unknown): Promise<void> {
  */
 export default handler(async (req: Request) => {
   methodIs(req, "POST");
+  const job = await requireJobFrom(req);
+  const who = comms(job);
   const body = await readJson<Record<string, unknown>>(req);
 
   // A field hidden from people and irresistible to form-filling bots. Answer
@@ -78,7 +93,7 @@ export default handler(async (req: Request) => {
   const [recent] = await db
     .select({ createdAt: quoteRequests.createdAt })
     .from(quoteRequests)
-    .where(eq(quoteRequests.email, email))
+    .where(and(eq(quoteRequests.jobId, job.id), eq(quoteRequests.email, email)))
     .orderBy(desc(quoteRequests.createdAt))
     .limit(1);
   if (recent) {
@@ -92,23 +107,25 @@ export default handler(async (req: Request) => {
   }
 
   // Read from the database rather than trusting the number the page sent, so
-  // the figure on the quote is the one the survey actually holds.
+  // the figure on the quote is the one the survey actually holds — and scoped
+  // to this job, so it can never include another client's vents.
   const [{ total }] = await db
     .select({ total: sql<number>`coalesce(sum(${proposedVents.additionalSf}), 0)` })
-    .from(proposedVents);
+    .from(proposedVents)
+    .where(eq(proposedVents.jobId, job.id));
   const additionalSf = Number(total) || 0;
   const sf = additionalSf.toLocaleString("en-US");
 
   const [row] = await db
     .insert(quoteRequests)
-    .values({ name, email, company, jobTitle, additionalSf })
+    .values({ jobId: job.id, name, email, company, jobTitle, additionalSf })
     .returning();
 
   const notify = {
-    personalizations: [{ to: [{ email: NOTIFY }] }],
-    from: FROM,
+    personalizations: [{ to: [{ email: who.notify }] }],
+    from: who.from,
     reply_to: { email, name },
-    subject: `URGENT: ADDITIONAL SCOPE REQUESTED | ${JOB_NAME}`,
+    subject: `URGENT: ADDITIONAL SCOPE REQUESTED | ${who.jobName}`,
     content: [
       {
         type: "text/html",
@@ -116,7 +133,7 @@ export default handler(async (req: Request) => {
 <div style="font-family:Arial,Helvetica,sans-serif;color:#333;max-width:560px">
   <p style="font-size:15px;margin:0 0 16px">
     <strong>${esc(name)}</strong> has requested a quote for the additional scope at
-    <strong>${esc(JOB_NAME)}</strong>.
+    <strong>${esc(who.jobName)}</strong>.
   </p>
   <table style="border-collapse:collapse;font-size:14px;margin-bottom:18px">
     <tr><td style="padding:4px 14px 4px 0;color:#6B7280">Name</td><td style="padding:4px 0"><strong>${esc(name)}</strong></td></tr>
@@ -126,7 +143,7 @@ export default handler(async (req: Request) => {
     <tr><td style="padding:4px 14px 4px 0;color:#6B7280">Additional scope</td><td style="padding:4px 0"><strong>${sf} SF</strong></td></tr>
   </table>
   <p style="font-size:14px;margin:0 0 18px">
-    <a href="${REPORT_URL}" style="color:#1E2C55">Open the report</a>
+    <a href="${who.reportUrl}" style="color:#1E2C55">Open the report</a>
   </p>
   <p style="font-size:12px;color:#6B7280;margin:0">
     Request #${row.id}. Reply to this email to reach ${esc(name)} directly.
@@ -138,9 +155,9 @@ export default handler(async (req: Request) => {
 
   const confirm = {
     personalizations: [{ to: [{ email, name }] }],
-    from: FROM,
-    reply_to: { email: NOTIFY, name: "Adam Capps" },
-    subject: `Additional scope requested — ${JOB_NAME}`,
+    from: who.from,
+    reply_to: { email: who.notify, name: who.notifyName },
+    subject: `Additional scope requested — ${who.jobName}`,
     content: [
       {
         type: "text/html",
@@ -149,16 +166,16 @@ export default handler(async (req: Request) => {
   <p style="font-size:15px;margin:0 0 16px">${esc(name)},</p>
   <p style="font-size:15px;margin:0 0 16px">
     Thank you — your request for a quote on the additional scope at
-    <strong>${esc(JOB_NAME)}</strong> has been received.
+    <strong>${esc(who.jobName)}</strong> has been received.
   </p>
   <p style="font-size:15px;margin:0 0 16px">
-    This covers the <strong>${sf} SF</strong> identified during the post-install
-    scan that sits outside the original scope of work. We will prepare a quote
-    for those areas and follow up shortly.
+    This covers the <strong>${sf} SF</strong> identified during the latest scan
+    that sits outside the original scope of work. We will prepare a quote for
+    those areas and follow up shortly.
   </p>
   <p style="font-size:14px;margin:0 0 20px">
     The drying progress report stays available here:
-    <a href="${REPORT_URL}" style="color:#1E2C55">${REPORT_URL}</a>
+    <a href="${who.reportUrl}" style="color:#1E2C55">${who.reportUrl}</a>
   </p>
   <p style="font-size:13px;color:#6B7280;margin:0">
     ReDry &middot; re-dry.com &middot; 877.733.7973<br>

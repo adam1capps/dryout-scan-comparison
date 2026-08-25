@@ -177,22 +177,6 @@ export function useAnnotations(getToken) {
     [attempt, getToken],
   );
 
-  /** Clears (or edits) a carry-over per-building note once it has been moved. */
-  const clearVentNote = useCallback(
-    (building) =>
-      attempt(async () => {
-        await api.setVentNote(building, "", getToken);
-        setData((d) => ({
-          ...d,
-          proposals: d.proposals.map((p) =>
-            p.building === building ? { ...p, reason: "" } : p,
-          ),
-        }));
-        return true;
-      }),
-    [attempt, getToken],
-  );
-
   const addCollectMark = useCallback(
     (pin) =>
       attempt(async () => {
@@ -235,7 +219,6 @@ export function useAnnotations(getToken) {
     addProposedVent,
     removeProposedVent,
     updateVents,
-    clearVentNote,
     addCollectMark,
     removeCollectMark,
   };

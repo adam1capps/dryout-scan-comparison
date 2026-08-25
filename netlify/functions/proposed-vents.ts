@@ -1,4 +1,4 @@
-import { eq, inArray } from "drizzle-orm";
+import { and, eq, inArray } from "drizzle-orm";
 import { db } from "../../db/index";
 import { proposedVents } from "../../db/schema";
 import {
@@ -9,6 +9,7 @@ import {
   methodIs,
   readJson,
   readPin,
+  requireJobFrom,
   requireUser,
 } from "./_lib";
 
@@ -76,13 +77,14 @@ function readVentFields(body: Record<string, unknown>) {
  */
 export default handler(async (req: Request) => {
   const method = methodIs(req, "POST", "PATCH", "DELETE");
-  await requireUser(req);
+  const job = await requireJobFrom(req);
+  await requireUser(req, job);
 
   if (method === "POST") {
     const body = await readJson<Record<string, unknown>>(req);
     const [created] = await db
       .insert(proposedVents)
-      .values({ ...readPin(body), ...readVentFields(body) })
+      .values({ jobId: job.id, ...readPin(body), ...readVentFields(body) })
       .returning();
     return json(created, 201);
   }
@@ -108,7 +110,7 @@ export default handler(async (req: Request) => {
       const updated = await db
         .update(proposedVents)
         .set(patch)
-        .where(inArray(proposedVents.id, ids))
+        .where(and(inArray(proposedVents.id, ids), eq(proposedVents.jobId, job.id)))
         .returning();
       return json({ updated });
     }
@@ -117,7 +119,7 @@ export default handler(async (req: Request) => {
     const [updated] = await db
       .update(proposedVents)
       .set(patch)
-      .where(eq(proposedVents.id, id))
+      .where(and(eq(proposedVents.id, id), eq(proposedVents.jobId, job.id)))
       .returning();
     if (!updated) throw new HttpError(404, "That vent marker no longer exists.");
     return json({ updated: [updated] });
@@ -127,10 +129,12 @@ export default handler(async (req: Request) => {
   const [existing] = await db
     .select()
     .from(proposedVents)
-    .where(eq(proposedVents.id, id))
+    .where(and(eq(proposedVents.id, id), eq(proposedVents.jobId, job.id)))
     .limit(1);
   if (!existing) throw new HttpError(404, "That vent marker no longer exists.");
 
-  await db.delete(proposedVents).where(eq(proposedVents.id, id));
+  await db
+    .delete(proposedVents)
+    .where(and(eq(proposedVents.id, id), eq(proposedVents.jobId, job.id)));
   return json({ deleted: id });
 });

@@ -10,6 +10,22 @@
  * tested without a React tree.
  */
 
+/**
+ * Which job this page shows. A vanity hostname resolves server-side from the
+ * Host header; the canonical reports.re-dry.com/<slug> path carries the slug
+ * here. Falls back to "demo" so local development works from the root path.
+ */
+const JOB = (() => {
+  try {
+    const seg = window.location.pathname.split("/").filter(Boolean)[0];
+    return seg ? seg.toLowerCase() : "demo";
+  } catch {
+    return "demo";
+  }
+})();
+
+const withJob = (path) => `${path}${path.includes("?") ? "&" : "?"}job=${encodeURIComponent(JOB)}`;
+
 async function send(path, { method = "GET", body, getToken, contentType } = {}) {
   const headers = {};
   if (getToken) {
@@ -20,7 +36,7 @@ async function send(path, { method = "GET", body, getToken, contentType } = {}) 
     headers["content-type"] = contentType || "application/json";
   }
 
-  const res = await fetch(path, {
+  const res = await fetch(withJob(path), {
     method,
     headers,
     body:
@@ -67,10 +83,6 @@ export const deleteFinding = (id, getToken) =>
 
 export const createProposedVent = (pin, getToken) =>
   send("/api/proposed-vents", { method: "POST", body: pin, getToken });
-
-/** Edits or clears a carry-over per-building vent note. */
-export const setVentNote = (building, reason, getToken) =>
-  send("/api/vent-note", { method: "PATCH", body: { building, reason }, getToken });
 
 /** Updates one vent's category, note or square footage. */
 export const updateProposedVent = (id, fields, getToken) =>

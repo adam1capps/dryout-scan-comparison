@@ -1,5 +1,5 @@
 import { getStore } from "@netlify/blobs";
-import { HttpError, handler, json, methodIs, requireUser } from "./_lib";
+import { HttpError, handler, json, methodIs, requireJobFrom, requireUser } from "./_lib";
 
 const STORE = "finding-photos";
 const MAX_BYTES = 4 * 1024 * 1024;
@@ -39,7 +39,8 @@ export default handler(async (req: Request) => {
     });
   }
 
-  await requireUser(req);
+  const job = await requireJobFrom(req);
+  await requireUser(req, job);
 
   const contentType = req.headers.get("content-type") || "";
   if (!ALLOWED.has(contentType)) {
@@ -53,7 +54,10 @@ export default handler(async (req: Request) => {
   }
 
   const ext = contentType.split("/")[1];
-  const key = `${Date.now()}-${Math.random().toString(36).slice(2, 10)}.${ext}`;
+  // Job-prefixed so a job's photos can be listed, backed up, or removed as a
+  // unit. GETs stay key-addressed: keys are unguessable and the photos are on
+  // a public report anyway.
+  const key = `${job.id}/${Date.now()}-${Math.random().toString(36).slice(2, 10)}.${ext}`;
   await store.set(key, bytes, { metadata: { contentType } });
 
   return json({ key, url: `/api/photo?key=${encodeURIComponent(key)}` }, 201);

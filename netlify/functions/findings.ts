@@ -1,4 +1,4 @@
-import { eq } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 import { getStore } from "@netlify/blobs";
 import { db } from "../../db/index";
 import { findings } from "../../db/schema";
@@ -10,6 +10,7 @@ import {
   methodIs,
   readJson,
   readPin,
+  requireJobFrom,
   requireUser,
 } from "./_lib";
 
@@ -43,13 +44,25 @@ async function dropPhoto(key: string | null) {
 
 export default handler(async (req: Request) => {
   const method = methodIs(req, "POST", "PATCH", "DELETE");
-  await requireUser(req);
+  const job = await requireJobFrom(req);
+  await requireUser(req, job);
+
+  // photoKey names a blob in the shared store, and the keys are public (the
+  // annotations read serves them to everyone). Without this check an editor
+  // could reference — and on delete, drop — another job's photo bytes.
+  const ownPhoto = (key: string | null) => {
+    if (key && !key.startsWith(`${job.id}/`)) {
+      throw new HttpError(400, "That photo does not belong to this report.");
+    }
+  };
 
   if (method === "POST") {
     const body = await readJson<Record<string, unknown>>(req);
+    const fields = readBody(body);
+    ownPhoto(fields.photoKey);
     const [created] = await db
       .insert(findings)
-      .values({ ...readPin(body), ...readBody(body) })
+      .values({ jobId: job.id, ...readPin(body), ...fields })
       .returning();
     return json(created, 201);
   }
@@ -58,10 +71,15 @@ export default handler(async (req: Request) => {
     const id = idFromQuery(req);
     const body = await readJson<Record<string, unknown>>(req);
 
-    const [existing] = await db.select().from(findings).where(eq(findings.id, id)).limit(1);
+    const [existing] = await db
+      .select()
+      .from(findings)
+      .where(and(eq(findings.id, id), eq(findings.jobId, job.id)))
+      .limit(1);
     if (!existing) throw new HttpError(404, "That finding no longer exists.");
 
     const next = readBody(body);
+    ownPhoto(next.photoKey);
     // Swapping or clearing the photo leaves the old blob unreferenced.
     if (existing.photoKey && existing.photoKey !== next.photoKey) {
       await dropPhoto(existing.photoKey);
@@ -70,15 +88,19 @@ export default handler(async (req: Request) => {
     const [updated] = await db
       .update(findings)
       .set({ ...next, updatedAt: new Date() })
-      .where(eq(findings.id, id))
+      .where(and(eq(findings.id, id), eq(findings.jobId, job.id)))
       .returning();
     return json(updated);
   }
 
   const id = idFromQuery(req);
-  const [existing] = await db.select().from(findings).where(eq(findings.id, id)).limit(1);
+  const [existing] = await db
+    .select()
+    .from(findings)
+    .where(and(eq(findings.id, id), eq(findings.jobId, job.id)))
+    .limit(1);
   if (!existing) throw new HttpError(404, "That finding no longer exists.");
   await dropPhoto(existing.photoKey);
-  await db.delete(findings).where(eq(findings.id, id));
+  await db.delete(findings).where(and(eq(findings.id, id), eq(findings.jobId, job.id)));
   return json({ deleted: id });
 });
