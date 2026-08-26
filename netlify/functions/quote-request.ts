@@ -1,60 +1,17 @@
 import { and, desc, eq, sql } from "drizzle-orm";
 import { db } from "../../db/index";
 import { proposedVents, quoteRequests } from "../../db/schema";
-import type { Job } from "./_lib";
 import { HttpError, handler, json, methodIs, readJson, requireJobFrom } from "./_lib";
+import { comms, esc, sendMail } from "./_mail";
 
 /** Same address cannot re-request inside this window, per job. */
 const COOLDOWN_MINUTES = 10;
-
-/** Platform-level fallbacks; a job's config row overrides any of them. */
-const DEFAULT_NOTIFY = "adam@re-dry.com";
-const DEFAULT_FROM = { email: "adam@re-dry.com", name: "ReDry" };
-
-const esc = (s: string) =>
-  s.replace(/[&<>"']/g, (c) =>
-    ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]!,
-  );
 
 function field(body: Record<string, unknown>, key: string, max: number): string {
   const value = String(body[key] ?? "").trim();
   if (!value) throw new HttpError(400, `${key} is required.`);
   if (value.length > max) throw new HttpError(400, `${key} is too long.`);
   return value;
-}
-
-/** The comms identity for one job, config-driven with platform fallbacks. */
-function comms(job: Job) {
-  const cfg = (job.config ?? {}) as Record<string, unknown>;
-  return {
-    jobName: String(cfg.name ?? job.slug),
-    reportUrl: String(cfg.publicUrl ?? `https://reports.re-dry.com/${job.slug}`),
-    notify: String(cfg.notifyEmail ?? DEFAULT_NOTIFY),
-    notifyName: String(cfg.notifyName ?? "ReDry"),
-    from: {
-      email: String(cfg.fromEmail ?? DEFAULT_FROM.email),
-      name: String(cfg.fromName ?? DEFAULT_FROM.name),
-    },
-  };
-}
-
-async function send(payload: unknown): Promise<void> {
-  const key = process.env.SENDGRID_API_KEY;
-  if (!key) throw new Error("SENDGRID_API_KEY is not configured");
-  const res = await fetch("https://api.sendgrid.com/v3/mail/send", {
-    method: "POST",
-    headers: {
-      authorization: `Bearer ${key}`,
-      "content-type": "application/json",
-    },
-    body: JSON.stringify(payload),
-  });
-  // The API answers 202 Accepted — queued, not delivered. Anything else is a
-  // real failure and carries a JSON body explaining why.
-  if (res.status !== 202) {
-    const detail = await res.text().catch(() => "");
-    throw new Error(`SendGrid answered ${res.status}: ${detail.slice(0, 300)}`);
-  }
 }
 
 /**
@@ -191,8 +148,8 @@ export default handler(async (req: Request) => {
   try {
     // Notify first: if only one of the two can get through, it should be the
     // one that reaches somebody who can act on it.
-    await send(notify);
-    await send(confirm);
+    await sendMail(notify);
+    await sendMail(confirm);
     await db
       .update(quoteRequests)
       .set({ notifiedAt: new Date() })

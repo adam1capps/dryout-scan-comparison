@@ -82,6 +82,33 @@ export const listJobs = (getToken) => send("/api/jobs", { getToken });
 export const saveJob = (payload, getToken) =>
   send("/api/jobs", { method: "POST", body: payload, getToken });
 
+// ---- change orders ---------------------------------------------------------
+
+/** This job's change orders, staff only. */
+export const listChangeOrders = (getToken) => send("/api/change-orders", { getToken });
+
+export const createChangeOrder = (fields, getToken) =>
+  send("/api/change-orders", { method: "POST", body: { action: "create", ...fields }, getToken });
+
+export const updateChangeOrder = (id, fields, getToken) =>
+  send("/api/change-orders", { method: "POST", body: { action: "update", id, ...fields }, getToken });
+
+export const sendChangeOrder = (id, getToken) =>
+  send("/api/change-orders", { method: "POST", body: { action: "send", id }, getToken });
+
+export const voidChangeOrder = (id, getToken) =>
+  send("/api/change-orders", { method: "POST", body: { action: "void", id }, getToken });
+
+/** The client's view of one change order, by its link token. */
+export const loadChangeOrder = (token) =>
+  send(`/api/change-order?token=${encodeURIComponent(token)}`);
+
+export const acceptChangeOrder = (token, fields) =>
+  send("/api/change-order", { method: "POST", body: { action: "accept", token, ...fields } });
+
+export const declineChangeOrder = (token) =>
+  send("/api/change-order", { method: "POST", body: { action: "decline", token } });
+
 /**
  * Uploads a roof scan or vent map for the wizard. NOT shrunk — scan imagery
  * must stay pixel-exact, because the stored aspect ratio is what keeps every
