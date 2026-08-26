@@ -6,6 +6,7 @@ import Lightbox from "./components/Lightbox.jsx";
 import ErrorBoundary from "./components/ErrorBoundary.jsx";
 import CampusOverview from "./screens/CampusOverview.jsx";
 import BuildingDetail from "./screens/BuildingDetail.jsx";
+import SetupScreen from "./screens/SetupScreen.jsx";
 import { TERMS, findBuilding } from "./data/project.js";
 import { useAnnotations } from "./useAnnotations.js";
 import { useDeployVersion } from "./useDeployVersion.js";
@@ -31,6 +32,14 @@ function Shell({ canEdit, getToken, authEnabled = false }) {
   const updateAvailable = useDeployVersion();
   // "campus", or a building id.
   const [view, setView] = useState("campus");
+  // The staff wizard lives at #/setup; everything else is the report.
+  const [hash, setHash] = useState(() => window.location.hash);
+  useEffect(() => {
+    const onHash = () => setHash(window.location.hash);
+    window.addEventListener("hashchange", onHash);
+    return () => window.removeEventListener("hashchange", onHash);
+  }, []);
+  const inSetup = hash === "#/setup";
   const [lightbox, setLightbox] = useState(null);
 
   const openBuilding = useCallback((id) => {
@@ -73,7 +82,11 @@ function Shell({ canEdit, getToken, authEnabled = false }) {
         {updateAvailable && <UpdateBar />}
         {store.error && <ErrorBar message={store.error} onDismiss={store.dismissError} />}
 
-        {store.status === "loading" ? (
+        {inSetup ? (
+          <ErrorBoundary label="Job setup could not be displayed.">
+            <SetupScreen canEdit={canEdit} getToken={getToken} />
+          </ErrorBoundary>
+        ) : store.status === "loading" ? (
           <LoadingNote />
         ) : building ? (
           // Keyed by building so a contained error clears when another is
