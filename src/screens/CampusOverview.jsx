@@ -19,15 +19,6 @@ import { allVents, summarise } from "../ventCategories.js";
 import { buildingScope, campusScope } from "../scope.js";
 import { C, card, dryingTone, fmtSF, sectionHeading, th } from "../theme.js";
 
-const SORTABLE = [
-  { key: "id", label: TERMS.unit, align: "left" },
-  { key: "pre", label: "Baseline", align: "right" },
-  { key: "change", label: "Change", align: "right" },
-  { key: "post", label: "Latest Scan", align: "right" },
-  { key: "pct", label: "% Change", align: "right" },
-  { key: "scope", label: "Additional Scope Found", align: "right" },
-];
-
 const SORT_VALUE = {
   id: (b) => b.id,
   pre: (b, s) => s.pre,
@@ -37,13 +28,23 @@ const SORT_VALUE = {
   scope: (b, s) => s.outOfScope,
 };
 
-const TIMELINE = [
-  { dot: C.navy, label: BASELINE.label, value: BASELINE.date },
-  { dot: C.orange, label: "System installed", value: INSTALL.range },
-  ...SCANS.slice(1).map((s) => ({ dot: C.green, label: s.label, value: s.date })),
-];
-
 export default function CampusOverview({ store, canEdit, onOpenBuilding }) {
+  // Built during render, never at module scope: the manifest's exports are
+  // live bindings settled by initJob() before mount, and a module-level
+  // capture would freeze whatever the demo fixture held at import time.
+  const SORTABLE = [
+    { key: "id", label: TERMS.unit, align: "left" },
+    { key: "pre", label: "Baseline", align: "right" },
+    { key: "change", label: "Change", align: "right" },
+    { key: "post", label: "Latest Scan", align: "right" },
+    { key: "pct", label: "% Change", align: "right" },
+    { key: "scope", label: "Additional Scope Found", align: "right" },
+  ];
+  const TIMELINE = [
+    { dot: C.navy, label: BASELINE.label, value: BASELINE.date },
+    { dot: C.orange, label: "System installed", value: INSTALL.range },
+    ...SCANS.slice(1).map((s) => ({ dot: C.green, label: s.label, value: s.date })),
+  ];
   const [sortKey, setSortKey] = useState("id");
   const [sortDir, setSortDir] = useState(1);
 
