@@ -1,0 +1,65 @@
+name: Prune old Netlify deploys
+
+# Netlify serves every past deploy forever at its own permalink, publicly and
+# unauthenticated — and those old function bundles run against the LIVE
+# database and blob store. Fixing an authorization flaw and deploying does not
+# retire the flaw; only deleting the deploy does.
+#
+# On the McCallum site that cleanup was a documented ritual nobody could be
+# relied on to perform. Here it is a job: every push to main, after the deploy
+# settles, everything older than the newest KEEP deploys is deleted.
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+    inputs:
+      keep:
+        description: How many recent deploys to keep
+        default: "5"
+
+concurrency:
+  group: prune-deploys
+  cancel-in-progress: false
+
+jobs:
+  prune:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Wait for the new deploy to be created
+        if: github.event_name == 'push'
+        run: sleep 180
+
+      - name: Delete deploys older than the newest KEEP
+        env:
+          NETLIFY_AUTH_TOKEN: ${{ secrets.NETLIFY_AUTH_TOKEN }}
+          NETLIFY_SITE_ID: ${{ secrets.NETLIFY_SITE_ID }}
+          KEEP: ${{ github.event.inputs.keep || '5' }}
+        run: |
+          set -euo pipefail
+          if [ -z "${NETLIFY_AUTH_TOKEN:-}" ] || [ -z "${NETLIFY_SITE_ID:-}" ]; then
+            echo "NETLIFY_AUTH_TOKEN and NETLIFY_SITE_ID repository secrets are not set."
+            echo "Add them in Settings > Secrets and variables > Actions, then re-run."
+            exit 1
+          fi
+
+          api() {
+            curl -sS -H "Authorization: Bearer $NETLIFY_AUTH_TOKEN" "$@"
+          }
+
+          # Newest first. Keep the newest $KEEP; delete the rest.
+          api "https://api.netlify.com/api/v1/sites/$NETLIFY_SITE_ID/deploys?per_page=100" \
+            > deploys.json
+
+          total=$(jq 'length' deploys.json)
+          echo "Site has $total deploys; keeping the newest $KEEP."
+
+          jq -r --argjson keep "$KEEP" '.[$keep:] | .[] | .id' deploys.json > stale.txt || true
+          count=0
+          while read -r id; do
+            [ -n "$id" ] || continue
+            api -X DELETE -o /dev/null -w "deleted %{http_code} $id\n" \
+              "https://api.netlify.com/api/v1/deploys/$id"
+            count=$((count + 1))
+          done < stale.txt
+          echo "Deleted $count deploy(s)."

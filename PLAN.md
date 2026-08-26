@@ -386,21 +386,24 @@ per-building SF, save — the report updates live. **Each change order:** prefil
 - **Phase 0 — Decisions & pre-flight**: **DONE 2026-08-23** — repo seeded, all eleven
   decisions locked (§11). Still open on Adam's side: confirm SendGrid domain
   authentication in the dashboard.
-- **Phase 1 — Extract the template core** (in the new repo): config-driven refactor
+- **Phase 1 — Extract the template core** (**DONE**) (in the new repo): config-driven refactor
   (schema in §2/§3: terminology, features, units, copy), **multi-round scans data
   model**, parameterize `scope.js`, string sweep, generated `index.html` head + OG card
   from the manifest, drop dead fields/legacy UI, fix the known hazards (hand-summed 144,
   unguarded % sort, honest worsening display, favicon — there is none today and the SPA
   catch-all serves HTML as `/favicon.ico`).
-- **Phase 2 — Multi-tenant backend**: `jobs` table + `job_id` everywhere + composite
+- **Phase 2 — Multi-tenant backend** (**DONE**): `jobs` table + `job_id` everywhere + composite
   uniques; host/path job resolution; scoped query helpers; job-scoped quote flow;
   job-prefixed content-addressed asset store; per-job editors.
-- **Phase 3 — The wizard**: drop zones per round, auto-mapping grid, validation rules
+- **Phase 3 — The wizard** (**DONE**): drop zones per round, auto-mapping grid, validation rules
   (§3), add-a-round rescan flow, manifest save.
-- **Phase 4 — Change orders**: schema, pricing config, branded PDF generation, SendGrid
-  send + accept-in-report flow, Quote It integration, the cross-job revenue radar.
-- **Phase 5 — Ops hardening**: deploy-cleanup Action, generalized authenticated backup,
-  SendGrid domain auth + `reports@`, DNS delegation, docs.
+- **Phase 4 — Change orders**: **DONE** — schema, the two pricing defaults, branded
+  PDF on the Proposal Builder's format, SendGrid send, accept-in-report with the
+  e-signature format and a signature certificate page, and the per-job ledger.
+- **Phase 5 — Ops hardening**: **DONE** — deploy-pruning Action, the authenticated
+  full-fleet export and backup, README runbook and first-time setup. Still on Adam's
+  side: create the Netlify site + database, set the four environment variables and the
+  two repository secrets, and confirm SendGrid domain authentication.
 - **Phase 6 — McCallum import & cutover** (optional, separately approved; see §4).
 
 Phases 1–4 are the build; each lands as a reviewable PR on the new repo. The McCallum
