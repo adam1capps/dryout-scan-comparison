@@ -75,6 +75,13 @@ export const loadAnnotations = (getToken) => send("/api/annotations", { getToken
 /** The job's manifest and public config — fetched before the app mounts. */
 export const loadJob = () => send("/api/job");
 
+/** Every job in the registry. Staff only; the server enforces it. */
+export const listJobs = (getToken) => send("/api/jobs", { getToken });
+
+/** Creates or updates a job by slug — the wizard's save. */
+export const saveJob = (payload, getToken) =>
+  send("/api/jobs", { method: "POST", body: payload, getToken });
+
 /**
  * Uploads a roof scan or vent map for the wizard. NOT shrunk — scan imagery
  * must stay pixel-exact, because the stored aspect ratio is what keeps every

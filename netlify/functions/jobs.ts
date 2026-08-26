@@ -1,4 +1,4 @@
-import { asc, eq } from "drizzle-orm";
+import { asc } from "drizzle-orm";
 import { db } from "../../db/index";
 import { jobs } from "../../db/schema";
 import { HttpError, handler, json, methodIs, readJson, requireUser } from "./_lib";

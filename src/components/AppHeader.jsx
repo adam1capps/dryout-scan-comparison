@@ -49,6 +49,22 @@ export default function AppHeader({ authEnabled }) {
         </div>
         {authEnabled && (
           <>
+            <SignedIn>
+              <a
+                href="#/setup"
+                style={{
+                  color: C.navyTint,
+                  fontSize: 12,
+                  fontWeight: 700,
+                  textDecoration: "none",
+                  border: "1px solid rgba(255,255,255,0.25)",
+                  borderRadius: 6,
+                  padding: "6px 12px",
+                }}
+              >
+                Job setup
+              </a>
+            </SignedIn>
             <SignedOut>
               <SignInButton mode="modal">
                 <button
