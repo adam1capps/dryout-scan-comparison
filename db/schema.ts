@@ -152,6 +152,50 @@ export const quoteRequests = pgTable("quote_requests", {
   createdAt: timestamp("created_at").defaultNow().notNull(),
 });
 
+/**
+ * A change order: the additional out-of-scope square footage priced, sent,
+ * and accepted inside the report (PLAN.md §6, decisions §11.9-11).
+ *
+ * Money lives in integer cents. The `snapshot` records the out-of-scope SF
+ * and proposed-vent list at send time — a change order must stay traceable to
+ * the figures the client saw, the same principle quote_requests follows. The
+ * `token` is the client link's only credential (unguessable, like the
+ * Proposal Builder's ids); `signature` holds the acceptance evidence record.
+ */
+export const changeOrders = pgTable(
+  "change_orders",
+  {
+    id: serial().primaryKey(),
+    jobId: integer("job_id")
+      .notNull()
+      .references(() => jobs.id),
+    // Per-job sequence, shown on the document as Change Order No. N.
+    number: integer().notNull(),
+    token: varchar({ length: 64 }).notNull().unique(),
+    // draft | sent | accepted | declined | void. Text, not an enum, so a new
+    // status is a code change rather than a migration.
+    status: varchar({ length: 16 }).notNull().default("draft"),
+    // [{ description, qty, unit: "units"|"SF", rateCents, amountCents }]
+    lines: jsonb().$type<Record<string, unknown>[]>().notNull().default([]),
+    totalCents: integer("total_cents").notNull().default(0),
+    clientName: varchar("client_name", { length: 160 }).notNull().default(""),
+    clientEmail: varchar("client_email", { length: 200 }).notNull().default(""),
+    snapshot: jsonb().$type<Record<string, unknown>>().notNull().default({}),
+    // Unsigned document in the change-orders blob store; the signed copy
+    // (signature certificate appended) is written on acceptance.
+    documentKey: varchar("document_key", { length: 160 }),
+    signedDocumentKey: varchar("signed_document_key", { length: 160 }),
+    signature: jsonb().$type<Record<string, unknown>>(),
+    sentAt: timestamp("sent_at"),
+    viewedAt: timestamp("viewed_at"),
+    decidedAt: timestamp("decided_at"),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+    updatedAt: timestamp("updated_at").defaultNow().notNull(),
+  },
+  (t) => [unique().on(t.jobId, t.number)],
+);
+
+export type ChangeOrder = typeof changeOrders.$inferSelect;
 export type Job = typeof jobs.$inferSelect;
 export type QuoteRequest = typeof quoteRequests.$inferSelect;
 export type Finding = typeof findings.$inferSelect;

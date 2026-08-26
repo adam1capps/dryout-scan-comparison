@@ -51,6 +51,20 @@ export default function AppHeader({ authEnabled }) {
           <>
             <SignedIn>
               <a
+                href="#/change-orders"
+                style={{
+                  color: C.navyTint,
+                  fontSize: 12,
+                  fontWeight: 700,
+                  textDecoration: "none",
+                  border: "1px solid rgba(255,255,255,0.25)",
+                  borderRadius: 6,
+                  padding: "6px 12px",
+                }}
+              >
+                Change orders
+              </a>
+              <a
                 href="#/setup"
                 style={{
                   color: C.navyTint,

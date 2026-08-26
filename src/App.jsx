@@ -7,6 +7,8 @@ import ErrorBoundary from "./components/ErrorBoundary.jsx";
 import CampusOverview from "./screens/CampusOverview.jsx";
 import BuildingDetail from "./screens/BuildingDetail.jsx";
 import SetupScreen from "./screens/SetupScreen.jsx";
+import ChangeOrdersScreen from "./screens/ChangeOrdersScreen.jsx";
+import ChangeOrderScreen from "./screens/ChangeOrderScreen.jsx";
 import { TERMS, findBuilding } from "./data/project.js";
 import { useAnnotations } from "./useAnnotations.js";
 import { useDeployVersion } from "./useDeployVersion.js";
@@ -40,6 +42,8 @@ function Shell({ canEdit, getToken, authEnabled = false }) {
     return () => window.removeEventListener("hashchange", onHash);
   }, []);
   const inSetup = hash === "#/setup";
+  const inChangeOrders = hash === "#/change-orders";
+  const coToken = hash.startsWith("#/co/") ? hash.slice(5) : null;
   const [lightbox, setLightbox] = useState(null);
 
   const openBuilding = useCallback((id) => {
@@ -82,9 +86,17 @@ function Shell({ canEdit, getToken, authEnabled = false }) {
         {updateAvailable && <UpdateBar />}
         {store.error && <ErrorBar message={store.error} onDismiss={store.dismissError} />}
 
-        {inSetup ? (
+        {coToken ? (
+          <ErrorBoundary label="The change order could not be displayed.">
+            <ChangeOrderScreen token={coToken} />
+          </ErrorBoundary>
+        ) : inSetup ? (
           <ErrorBoundary label="Job setup could not be displayed.">
             <SetupScreen canEdit={canEdit} getToken={getToken} />
+          </ErrorBoundary>
+        ) : inChangeOrders ? (
+          <ErrorBoundary label="Change orders could not be displayed.">
+            <ChangeOrdersScreen canEdit={canEdit} getToken={getToken} />
           </ErrorBoundary>
         ) : store.status === "loading" ? (
           <LoadingNote />
