@@ -7,8 +7,12 @@ import { C } from "../theme.js";
  * The sign-in control sits here and nowhere else. A reader who never signs in
  * sees a quiet "Staff sign in" link and nothing else changes; signing in is
  * what turns the annotation tools on throughout the app.
+ *
+ * `authUnavailable` means sign-in was configured but failed to start, and the
+ * app dropped to read-only. The slot says so rather than going empty — this is
+ * the one place staff look for sign-in, and an absent link explains nothing.
  */
-export default function AppHeader({ authEnabled }) {
+export default function AppHeader({ authEnabled, authUnavailable = false }) {
   return (
     <header
       style={{ background: C.navy, position: "sticky", top: 0, zIndex: 60 }}
@@ -47,6 +51,14 @@ export default function AppHeader({ authEnabled }) {
         >
           Drying Progress
         </div>
+        {!authEnabled && authUnavailable && (
+          <span
+            title="Sign-in could not start. Check the Clerk keys on the site, then redeploy."
+            style={{ color: C.navyTint, fontSize: 12, fontWeight: 700, opacity: 0.6 }}
+          >
+            Staff sign-in unavailable
+          </span>
+        )}
         {authEnabled && (
           <>
             <SignedIn>

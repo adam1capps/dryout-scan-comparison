@@ -18,18 +18,30 @@ import { C } from "./theme.js";
  * Clerk's hooks only exist inside ClerkProvider, and hooks cannot be called
  * conditionally — so the two cases are two components rather than one branch.
  * `authEnabled` comes from build-time env and never changes at runtime, so
- * React never has to swap between them mid-session.
+ * React never has to swap between them mid-session. (The one exception: if
+ * sign-in throws as it starts, main.jsx mounts a fresh read-only tree in its
+ * place — a remount, not a conditional hook.)
  */
-export default function App({ authEnabled }) {
-  return authEnabled ? <AuthedApp /> : <Shell canEdit={false} getToken={null} />;
+export default function App({ authEnabled, authUnavailable = false }) {
+  return authEnabled ? (
+    <AuthedApp />
+  ) : (
+    <Shell canEdit={false} getToken={null} authUnavailable={authUnavailable} />
+  );
 }
 
 function AuthedApp() {
   const { isSignedIn, getToken } = useAuth();
-  return <Shell canEdit={!!isSignedIn} getToken={getToken} authEnabled />;
+  // Requests carry a token only once someone is actually signed in. Clerk's
+  // getToken waits for Clerk to load, so handing it to an anonymous reader
+  // holds the public report hostage to that load — and if it never finishes
+  // (an outage, a production key used off its domain), the report reads
+  // "Loading" forever for data that needs no account. Signing in swaps the
+  // getter in, which re-fetches with the staff-only fields included.
+  return <Shell canEdit={!!isSignedIn} getToken={isSignedIn ? getToken : null} authEnabled />;
 }
 
-function Shell({ canEdit, getToken, authEnabled = false }) {
+function Shell({ canEdit, getToken, authEnabled = false, authUnavailable = false }) {
   const store = useAnnotations(getToken);
   const updateAvailable = useDeployVersion();
   // "campus", or a building id.
@@ -71,7 +83,7 @@ function Shell({ canEdit, getToken, authEnabled = false }) {
 
   return (
     <div style={{ minHeight: "100vh", display: "flex", flexDirection: "column" }}>
-      <AppHeader authEnabled={authEnabled} />
+      <AppHeader authEnabled={authEnabled} authUnavailable={authUnavailable} />
 
       <main
         style={{
