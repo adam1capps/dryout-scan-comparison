@@ -13,6 +13,11 @@ import { C } from "../theme.js";
  * Errors are far likelier in the editing paths, which only render for signed-in
  * staff, so a fault there must not be able to take the report away from the
  * reader it was written for.
+ *
+ * `fallback` replaces the message with something to render instead — used to
+ * drop to the read-only report when sign-in fails. `page` marks the outermost
+ * boundary: nothing else on the page survived, so it says so and shows what
+ * failed, because a whole-page failure with no detail is undiagnosable.
  */
 export default class ErrorBoundary extends Component {
   state = { error: null };
@@ -27,8 +32,11 @@ export default class ErrorBoundary extends Component {
   }
 
   render() {
-    if (!this.state.error) return this.props.children;
+    const { error } = this.state;
+    if (!error) return this.props.children;
+    if (this.props.fallback !== undefined) return this.props.fallback;
 
+    const { page } = this.props;
     return (
       <div
         role="alert"
@@ -46,10 +54,20 @@ export default class ErrorBoundary extends Component {
           {this.props.label || "This section could not be displayed."}
         </div>
         <div style={{ color: C.muted, fontSize: 13 }}>
-          The rest of the report is unaffected. Reloading the page usually clears it.
+          {page
+            ? "Reloading the page usually clears it."
+            : "The rest of the report is unaffected. Reloading the page usually clears it."}
         </div>
+        {page && (
+          <details style={{ marginTop: 10, fontSize: 12, color: C.muted }}>
+            <summary style={{ cursor: "pointer" }}>Technical detail</summary>
+            <pre style={{ whiteSpace: "pre-wrap", wordBreak: "break-word", margin: "8px 0 0" }}>
+              {String(error?.stack || error?.message || error)}
+            </pre>
+          </details>
+        )}
         <button
-          onClick={() => this.setState({ error: null })}
+          onClick={() => (page ? window.location.reload() : this.setState({ error: null }))}
           style={{
             marginTop: 12,
             background: C.surface,
@@ -62,7 +80,7 @@ export default class ErrorBoundary extends Component {
             cursor: "pointer",
           }}
         >
-          Try again
+          {page ? "Reload" : "Try again"}
         </button>
       </div>
     );

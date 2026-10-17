@@ -18,10 +18,16 @@ import { C } from "./theme.js";
  * Clerk's hooks only exist inside ClerkProvider, and hooks cannot be called
  * conditionally — so the two cases are two components rather than one branch.
  * `authEnabled` comes from build-time env and never changes at runtime, so
- * React never has to swap between them mid-session.
+ * React never has to swap between them mid-session. (The one exception: if
+ * sign-in throws as it starts, main.jsx mounts a fresh read-only tree in its
+ * place — a remount, not a conditional hook.)
  */
-export default function App({ authEnabled }) {
-  return authEnabled ? <AuthedApp /> : <Shell canEdit={false} getToken={null} />;
+export default function App({ authEnabled, authUnavailable = false }) {
+  return authEnabled ? (
+    <AuthedApp />
+  ) : (
+    <Shell canEdit={false} getToken={null} authUnavailable={authUnavailable} />
+  );
 }
 
 function AuthedApp() {
@@ -29,7 +35,7 @@ function AuthedApp() {
   return <Shell canEdit={!!isSignedIn} getToken={getToken} authEnabled />;
 }
 
-function Shell({ canEdit, getToken, authEnabled = false }) {
+function Shell({ canEdit, getToken, authEnabled = false, authUnavailable = false }) {
   const store = useAnnotations(getToken);
   const updateAvailable = useDeployVersion();
   // "campus", or a building id.
@@ -71,7 +77,7 @@ function Shell({ canEdit, getToken, authEnabled = false }) {
 
   return (
     <div style={{ minHeight: "100vh", display: "flex", flexDirection: "column" }}>
-      <AppHeader authEnabled={authEnabled} />
+      <AppHeader authEnabled={authEnabled} authUnavailable={authUnavailable} />
 
       <main
         style={{
