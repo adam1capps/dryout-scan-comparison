@@ -32,7 +32,13 @@ export default function App({ authEnabled, authUnavailable = false }) {
 
 function AuthedApp() {
   const { isSignedIn, getToken } = useAuth();
-  return <Shell canEdit={!!isSignedIn} getToken={getToken} authEnabled />;
+  // Requests carry a token only once someone is actually signed in. Clerk's
+  // getToken waits for Clerk to load, so handing it to an anonymous reader
+  // holds the public report hostage to that load — and if it never finishes
+  // (an outage, a production key used off its domain), the report reads
+  // "Loading" forever for data that needs no account. Signing in swaps the
+  // getter in, which re-fetches with the staff-only fields included.
+  return <Shell canEdit={!!isSignedIn} getToken={isSignedIn ? getToken : null} authEnabled />;
 }
 
 function Shell({ canEdit, getToken, authEnabled = false, authUnavailable = false }) {
